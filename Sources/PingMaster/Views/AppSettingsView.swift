@@ -7,40 +7,31 @@ struct AppSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Система") {
+                Toggle("Запускать при входе в систему", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { setLaunchAtLogin($0) }
+            }
+
             Section("Опрос") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Интервал опроса")
-                        Spacer()
-                        Text(formatInterval(settings.interval))
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                    }
-                    Slider(value: $settings.interval, in: 5...300, step: 5)
-                    Text("Применяется ко всем хостам.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                HStack {
+                    Text("Интервал опроса")
+                    Spacer()
+                    IntervalInputRow(value: $settings.interval)
                 }
-                .padding(.vertical, 4)
+                Text("Применяется ко всем хостам.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Section("Пороги задержки") {
-                ThresholdInputRow(color: .green,  label: "Зелёный — до",     value: $settings.greenThreshold)
-                ThresholdInputRow(color: .orange, label: "Оранжевый — до",   value: $settings.orangeThreshold)
+                ThresholdInputRow(color: .green,  label: "Зелёный — до", value: $settings.greenThreshold)
+                ThresholdInputRow(color: .orange, label: "Оранжевый — до", value: $settings.orangeThreshold)
                 HStack {
                     Circle().fill(Color.red).frame(width: 10, height: 10)
                     Text("Красный — от \(Int(settings.orangeThreshold)) мс и выше")
                         .foregroundColor(.secondary)
-                        .font(.callout)
                 }
                 .padding(.vertical, 2)
-            }
-
-            Section("Система") {
-                Toggle("Запускать при входе в систему", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { enabled in
-                        setLaunchAtLogin(enabled)
-                    }
             }
         }
         .formStyle(.grouped)
@@ -60,12 +51,43 @@ struct AppSettingsView: View {
             launchAtLogin = getLaunchAtLoginStatus()
         }
     }
+}
 
-    private func formatInterval(_ seconds: Double) -> String {
-        if seconds < 60 { return "\(Int(seconds)) сек" }
-        let m = Int(seconds / 60)
-        let s = Int(seconds) % 60
-        return s == 0 ? "\(m) мин" : "\(m) мин \(s) сек"
+// Interval input: accepts seconds or "Xm Ys" notation, shows formatted value
+struct IntervalInputRow: View {
+    @Binding var value: Double
+    @State private var text: String = ""
+    @State private var editing = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            TextField("", text: $text)
+                .frame(width: 60)
+                .multilineTextAlignment(.trailing)
+                .onAppear { text = "\(Int(value))" }
+                .onSubmit { commit(); editing = false }
+                .onChange(of: text) { _ in editing = true }
+            Text("сек").foregroundColor(.secondary)
+            if !editing {
+                Text("(\(formatted))")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+        }
+    }
+
+    private var formatted: String {
+        if value < 60 { return "\(Int(value)) сек" }
+        let m = Int(value / 60); let s = Int(value) % 60
+        return s == 0 ? "\(m) мин" : "\(m)м \(s)с"
+    }
+
+    private func commit() {
+        if let v = Double(text.trimmingCharacters(in: .whitespaces)), v >= 1 {
+            value = v
+        } else {
+            text = "\(Int(value))"
+        }
     }
 }
 
@@ -80,12 +102,11 @@ struct ThresholdInputRow: View {
             Circle().fill(color).frame(width: 10, height: 10)
             Text(label)
             Spacer()
-            TextField("мс", text: $text)
+            TextField("", text: $text)
                 .frame(width: 70)
                 .multilineTextAlignment(.trailing)
                 .onAppear { text = "\(Int(value))" }
                 .onSubmit { commit() }
-                .onChange(of: text) { _ in }
             Text("мс").foregroundColor(.secondary)
         }
         .padding(.vertical, 2)

@@ -59,21 +59,55 @@ struct DashboardView: View {
                 let now = Date()
                 let xMin = now.addingTimeInterval(-60)
                 let xMax = now.addingTimeInterval(2)
+                let settings = GlobalSettings.shared
 
-                Chart(history) { point in
-                    LineMark(
-                        x: .value("Время", point.timestamp),
-                        y: .value("мс", point.value)
+                Chart {
+                    // Threshold zone fills
+                    RectangleMark(
+                        xStart: .value("", xMin), xEnd: .value("", xMax),
+                        yStart: .value("", 0),    yEnd: .value("", settings.greenThreshold)
                     )
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.green.opacity(0.05))
 
-                    AreaMark(
-                        x: .value("Время", point.timestamp),
-                        y: .value("мс", point.value)
+                    RectangleMark(
+                        xStart: .value("", xMin), xEnd: .value("", xMax),
+                        yStart: .value("", settings.greenThreshold), yEnd: .value("", settings.orangeThreshold)
                     )
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(Color.accentColor.opacity(0.1))
+                    .foregroundStyle(Color.orange.opacity(0.05))
+
+                    RectangleMark(
+                        xStart: .value("", xMin), xEnd: .value("", xMax),
+                        yStart: .value("", settings.orangeThreshold), yEnd: .value("", settings.orangeThreshold * 3)
+                    )
+                    .foregroundStyle(Color.red.opacity(0.05))
+
+                    // Threshold lines
+                    RuleMark(y: .value("", settings.greenThreshold))
+                        .foregroundStyle(Color.green.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    RuleMark(y: .value("", settings.orangeThreshold))
+                        .foregroundStyle(Color.orange.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+
+                    // Data line
+                    ForEach(history) { point in
+                        LineMark(
+                            x: .value("Время", point.timestamp),
+                            y: .value("мс", point.value)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(Color.primary.opacity(0.6))
+                    }
+
+                    // Colored points
+                    ForEach(history) { point in
+                        PointMark(
+                            x: .value("Время", point.timestamp),
+                            y: .value("мс", point.value)
+                        )
+                        .foregroundStyle(latencyColor(point.value))
+                        .symbolSize(20)
+                    }
                 }
                 .chartXScale(domain: xMin...xMax)
                 .chartXAxis {
