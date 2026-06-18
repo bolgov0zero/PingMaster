@@ -9,46 +9,98 @@ struct HostEditView: View {
     @State private var method: PollMethod = .ping
     @State private var failThreshold: Int = 3
     @State private var showInMenu: Bool = true
+    @State private var showDeleteConfirm = false
 
     var isEditing: Bool { host != nil }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(isEditing ? "Редактировать хост" : "Добавить хост")
-                .font(.title2).bold()
+    private var isValid: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !address.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 12) {
-                GridRow {
-                    Text("Имя").gridColumnAlignment(.trailing)
-                    TextField("Например: Google DNS", text: $name)
-                }
-                GridRow {
-                    Text("Адрес").gridColumnAlignment(.trailing)
-                    TextField("8.8.8.8 или example.com", text: $address)
-                }
-                GridRow {
-                    Text("Метод").gridColumnAlignment(.trailing)
-                    Picker("", selection: $method) {
-                        ForEach(PollMethod.allCases, id: \.self) { m in
-                            Text(m.rawValue).tag(m)
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(alignment: .leading, spacing: 1) {
+                Text(isEditing ? "Редактирование хоста" : "Новый хост")
+                    .font(.headline)
+                Text(isValid ? (name.isEmpty ? address : name) : "Заполните имя и адрес")
+                    .font(.caption).foregroundColor(.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+
+            Divider()
+
+            ScrollView {
+                VStack(spacing: 14) {
+                    // Basics
+                    VStack(spacing: 0) {
+                        fieldRow(label: "Имя") {
+                            TextField("Google DNS", text: $name)
+                                .textFieldStyle(.plain)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        rowDivider
+                        fieldRow(label: "Адрес") {
+                            TextField("8.8.8.8 или example.com", text: $address)
+                                .textFieldStyle(.plain)
+                                .multilineTextAlignment(.trailing)
+                                .font(.body.monospaced())
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    .cardBackground()
+
+                    // Method
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("Метод проверки")
+                            Spacer()
+                        }
+                        Picker("", selection: $method) {
+                            ForEach(PollMethod.allCases, id: \.self) { m in
+                                Text(m.rawValue).tag(m)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
+                    .padding(14)
+                    .cardBackground()
+
+                    // Behaviour
+                    VStack(spacing: 0) {
+                        fieldRow(label: "Порог недоступности",
+                                 sublabel: "Неудач подряд до статуса «недоступен»") {
+                            Stepper("\(failThreshold)", value: $failThreshold, in: 1...10)
+                                .labelsHidden()
+                                .fixedSize()
+                            Text("\(failThreshold)")
+                                .monospacedDigit().frame(width: 18)
+                        }
+                        rowDivider
+                        fieldRow(label: "Показывать в меню",
+                                 sublabel: "Виден в списке меню-бара") {
+                            Toggle("", isOn: $showInMenu).labelsHidden()
+                        }
+                    }
+                    .cardBackground()
                 }
-                GridRow {
-                    Text("Порог").gridColumnAlignment(.trailing)
-                    Stepper("\(failThreshold) неудачных подряд", value: $failThreshold, in: 1...10)
-                }
-                GridRow {
-                    Text("").gridColumnAlignment(.trailing)
-                    Toggle("Показывать в меню панели", isOn: $showInMenu)
-                }
+                .padding(16)
             }
 
-            Spacer()
+            Divider()
 
+            // Footer
             HStack {
+                if isEditing {
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Удалить", systemImage: "trash")
+                    }
+                    .foregroundColor(.red)
+                }
                 Spacer()
                 Button("Отмена") { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -56,14 +108,57 @@ struct HostEditView: View {
                     save()
                     dismiss()
                 }
+                .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty ||
-                          address.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(!isValid)
             }
+            .padding(16)
         }
-        .padding(24)
-        .frame(width: 420, height: 300)
+        .frame(width: 460, height: 500)
         .onAppear { loadHost() }
+        .confirmationDialog(
+            "Удалить хост «\(name)»?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Удалить", role: .destructive) {
+                deleteHost()
+                dismiss()
+            }
+            Button("Отмена", role: .cancel) {}
+        }
+    }
+
+    private var rowDivider: some View {
+        Divider().padding(.leading, 14)
+    }
+
+    @ViewBuilder
+    private func fieldRow<Content: View>(
+        label: String,
+        sublabel: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                if let sublabel {
+                    Text(sublabel).font(.caption).foregroundColor(.secondary)
+                }
+            }
+            Spacer(minLength: 12)
+            content()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    private func deleteHost() {
+        guard let h = host else { return }
+        let service = MonitoringService.shared
+        if let idx = service.hosts.firstIndex(where: { $0.id == h.id }) {
+            service.remove(at: IndexSet(integer: idx))
+        }
     }
 
     private func loadHost() {

@@ -6,36 +6,52 @@ struct AppSettingsView: View {
     @State private var launchAtLogin: Bool = false
 
     var body: some View {
-        Form {
-            Section("Система") {
-                Toggle("Запускать при входе в систему", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { setLaunchAtLogin($0) }
-            }
-
-            Section("Опрос") {
-                HStack {
-                    Text("Интервал опроса")
-                    Spacer()
-                    IntervalInputRow(value: $settings.interval)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                SectionCard(title: "Система") {
+                    Toggle("Запускать при входе в систему", isOn: $launchAtLogin)
+                        .onChange(of: launchAtLogin) { setLaunchAtLogin($0) }
                 }
-                Text("Применяется ко всем хостам.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
 
-            Section("Пороги задержки") {
-                ThresholdInputRow(color: .green,  label: "Зелёный — до", value: $settings.greenThreshold)
-                ThresholdInputRow(color: .orange, label: "Оранжевый — до", value: $settings.orangeThreshold)
-                HStack {
-                    Circle().fill(Color.red).frame(width: 10, height: 10)
-                    Text("Красный — от \(Int(settings.orangeThreshold)) мс и выше")
+                SectionCard(title: "Уведомления") {
+                    Toggle("Уведомлять о падении и восстановлении", isOn: $settings.notificationsEnabled)
+                }
+
+                SectionCard(title: "Иконка в меню-баре") {
+                    Toggle("Показывать количество хостов", isOn: $settings.showCountInIcon)
+                    Text("Рядом с иконкой будет «5/0» — доступные и недоступные.")
+                        .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                .padding(.vertical, 2)
+
+                SectionCard(title: "Опрос") {
+                    HStack {
+                        Text("Интервал опроса")
+                        Spacer()
+                        IntervalInputRow(value: $settings.interval)
+                    }
+                    Divider()
+                    Text("Применяется ко всем хостам. Минимум — 5 секунд.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                SectionCard(title: "Пороги задержки") {
+                    ThresholdInputRow(color: .green,  label: "Зелёный — до", value: $settings.greenThreshold)
+                    Divider()
+                    ThresholdInputRow(color: .orange, label: "Оранжевый — до", value: $settings.orangeThreshold)
+                    Divider()
+                    HStack {
+                        Circle().fill(Color.red).frame(width: 10, height: 10)
+                        Text("Красный — от \(Int(settings.orangeThreshold)) мс и выше")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 2)
+                }
             }
+            .padding(16)
         }
-        .formStyle(.grouped)
-        .padding(20)
         .onAppear { launchAtLogin = getLaunchAtLoginStatus() }
     }
 
@@ -83,7 +99,8 @@ struct IntervalInputRow: View {
     }
 
     private func commit() {
-        if let v = Double(text.trimmingCharacters(in: .whitespaces)), v >= 1 {
+        // Minimum 5s: leaves room for the 3-packet ICMP burst.
+        if let v = Double(text.trimmingCharacters(in: .whitespaces)), v >= 5 {
             value = v
         } else {
             text = "\(Int(value))"

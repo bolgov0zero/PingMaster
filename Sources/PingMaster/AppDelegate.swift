@@ -8,12 +8,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        NotificationManager.shared.requestAuthorization()
         setupStatusItem()
         monitoringService.startAll()
     }
 
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         updateStatusIcon()
 
         if let button = statusItem?.button {
@@ -27,10 +28,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func updateStatusIcon() {
         let hosts = monitoringService.hosts
+        let downCount = hosts.filter { !$0.isAvailable }.count
         let color: NSColor
         if hosts.isEmpty {
             color = .white
-        } else if hosts.allSatisfy({ $0.isAvailable }) {
+        } else if downCount == 0 {
             color = .systemGreen
         } else {
             color = .systemRed
@@ -43,7 +45,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSBezierPath(ovalIn: NSRect(x: 2, y: 2, width: 12, height: 12)).fill()
         image.unlockFocus()
         image.isTemplate = false
-        statusItem?.button?.image = image
+
+        guard let button = statusItem?.button else { return }
+        button.image = image
+
+        // Optional count next to the icon: available/unavailable.
+        if GlobalSettings.shared.showCountInIcon && !hosts.isEmpty {
+            button.imagePosition = .imageLeading
+            let upCount = hosts.count - downCount
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+                .foregroundColor: NSColor.labelColor
+            ]
+            button.attributedTitle = NSAttributedString(string: " \(upCount)/\(downCount)", attributes: attrs)
+        } else {
+            button.imagePosition = .imageOnly
+            button.title = ""
+        }
     }
 
     @objc func handleClick(_ sender: NSStatusBarButton) {
@@ -85,8 +103,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 item.view = view
                 menu.addItem(item)
             }
-            menu.addItem(NSMenuItem.separator())
-            menu.addItem(NSMenuItem(title: "Ping все", action: #selector(forcePing), keyEquivalent: ""))
         }
 
         statusItem?.menu = menu
@@ -96,9 +112,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showRightMenu() {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Настройки...", action: #selector(openMain), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Настройки", action: #selector(openMain), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Выход", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Выход", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
 
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
@@ -117,24 +133,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openMain() {
         if mainWindow == nil {
             mainWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
+                contentRect: NSRect(x: 0, y: 0, width: 740, height: 780),
                 styleMask: [.titled, .closable, .resizable, .miniaturizable],
                 backing: .buffered,
                 defer: false
             )
             mainWindow?.title = "PingMaster"
             mainWindow?.contentView = NSHostingView(rootView: MainTabView())
+            mainWindow?.contentMinSize = NSSize(width: 700, height: 760)
             mainWindow?.center()
             mainWindow?.isReleasedWhenClosed = false
-            mainWindow?.delegate = self
         }
         mainWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 }
 
-extension AppDelegate: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        MonitoringService.shared.stopDashboardPolling()
-    }
-}

@@ -23,6 +23,12 @@ class Host: ObservableObject, Identifiable, Codable {
     @Published var isAvailable: Bool = true
     @Published var lastLatency: Double? = nil
     @Published var consecutiveFailures: Int = 0
+    @Published var sslExpiry: Date? = nil  // runtime only, HTTPS hosts
+
+    var sslDaysLeft: Int? {
+        guard let sslExpiry else { return nil }
+        return Calendar.current.dateComponents([.day], from: Date(), to: sslExpiry).day
+    }
 
     init(id: UUID = UUID(), name: String, address: String,
          method: PollMethod = .ping, failThreshold: Int = 3, showInMenu: Bool = true) {

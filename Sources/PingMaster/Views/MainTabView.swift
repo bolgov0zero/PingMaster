@@ -12,6 +12,6 @@ struct MainTabView: View {
             AppSettingsView()
                 .tabItem { Label("Настройки", systemImage: "gear") }
         }
-        .frame(minWidth: 650, minHeight: 460)
+        .frame(minWidth: 700, minHeight: 760)
     }
 }

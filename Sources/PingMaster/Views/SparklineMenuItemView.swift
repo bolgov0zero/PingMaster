@@ -7,20 +7,21 @@ class SparklineMenuItemView: NSView {
     private var refreshTimer: Timer?
 
     private var isHighlighted = false
-    private let barCount = 15
+    private let barCount = 10
     private let barWidth: CGFloat = 3
     private let barSpacing: CGFloat = 1
     private let barMaxHeight: CGFloat = 14
-    private let sidePadding: CGFloat = 12
-    private let nameWidth: CGFloat = 130
-    private let latencyWidth: CGFloat = 58
+    private let sidePadding: CGFloat = 10
+    private let nameWidth: CGFloat = 100
+    private let latencyWidth: CGFloat = 46
+    private let uptimeWidth: CGFloat = 38
 
     init(host: Host, history: [LatencyPoint], onSelect: @escaping () -> Void) {
         self.host = host
         self.history = history
         self.onSelect = onSelect
         let sparkWidth = CGFloat(barCount) * (barWidth + barSpacing) - barSpacing
-        let totalWidth = sidePadding + 14 + 6 + nameWidth + 8 + sparkWidth + 8 + latencyWidth + sidePadding
+        let totalWidth = sidePadding + 12 + 6 + nameWidth + 6 + sparkWidth + 6 + latencyWidth + 6 + uptimeWidth + sidePadding
         super.init(frame: NSRect(x: 0, y: 0, width: totalWidth, height: 22))
     }
 
@@ -61,11 +62,11 @@ class SparklineMenuItemView: NSView {
 
         var x = sidePadding
 
-        // Status dot
-        let dotColor = host.isAvailable ? NSColor.systemGreen : NSColor.systemRed
+        // Status dot — green / yellow / red per thresholds
+        let dotColor = MonitoringService.shared.status(for: host).nsColor
         dotColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: x, y: 6, width: 10, height: 10)).fill()
-        x += 14 + 6
+        x += 12 + 6
 
         // Host name (truncated)
         let nameAttrs: [NSAttributedString.Key: Any] = [
@@ -74,7 +75,7 @@ class SparklineMenuItemView: NSView {
         ]
         let nameStr = truncate(host.name, width: nameWidth, attrs: nameAttrs)
         nameStr.draw(at: NSPoint(x: x, y: 4))
-        x += nameWidth + 8
+        x += nameWidth + 6
 
         // Sparkline bars
         let recent = Array(history.suffix(barCount))
@@ -97,7 +98,7 @@ class SparklineMenuItemView: NSView {
                              xRadius: 1, yRadius: 1).fill()
             }
         }
-        x += sparkWidth + 8
+        x += sparkWidth + 6
 
         // Latency value
         let latencyText: String
@@ -113,6 +114,22 @@ class SparklineMenuItemView: NSView {
         let latencyStr = NSAttributedString(string: latencyText, attributes: latencyAttrs)
         let latencySize = latencyStr.size()
         latencyStr.draw(at: NSPoint(x: x + latencyWidth - latencySize.width, y: 4))
+        x += latencyWidth + 6
+
+        // Uptime % (last 24h / since launch)
+        let uptimeText: String
+        if let pct = MonitoringService.shared.uptimePercent(for: host) {
+            uptimeText = String(format: "%.0f%%", pct)
+        } else {
+            uptimeText = "–"
+        }
+        let uptimeAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular),
+            .foregroundColor: secondaryColor
+        ]
+        let uptimeStr = NSAttributedString(string: uptimeText, attributes: uptimeAttrs)
+        let uptimeSize = uptimeStr.size()
+        uptimeStr.draw(at: NSPoint(x: x + uptimeWidth - uptimeSize.width, y: 5))
     }
 
     // MARK: - Mouse
