@@ -12,8 +12,8 @@ class MonitoringService: ObservableObject {
     @Published var latencyHistory: [UUID: [LatencyPoint]] = [:]
     @Published var selectedHostID: UUID? = nil
 
-    private var timers: [UUID: Timer] = [:]
-    private var dashboardTimer: Timer?
+    private var sources: [UUID: DispatchSourceTimer] = [:]
+    private var dashboardSource: DispatchSourceTimer?
     private let saveKey = "PingMasterHosts"
     private let maxHistoryPoints = 120
     private var settingsCancellable: AnyCancellable?
@@ -54,22 +54,6 @@ class MonitoringService: ObservableObject {
         hosts.forEach { poll($0) }
     }
 
-    // MARK: - Dashboard fast polling (1s)
-
-    func startDashboardPolling() {
-        stopDashboardPolling()
-        guard let id = selectedHostID, let host = hosts.first(where: { $0.id == id }) else { return }
-        dashboardTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.poll(host)
-        }
-        poll(host)
-    }
-
-    func stopDashboardPolling() {
-        dashboardTimer?.invalidate()
-        dashboardTimer = nil
-    }
-
     // MARK: - Monitoring
 
     func startAll() {
@@ -86,17 +70,41 @@ class MonitoringService: ObservableObject {
     private func startMonitoring(_ host: Host) {
         stopMonitoring(host)
         let interval = GlobalSettings.shared.interval
-        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            self?.poll(host)
-        }
-        timers[host.id] = timer
+        let source = makeTimer(interval: interval) { [weak self] in self?.poll(host) }
+        sources[host.id] = source
         poll(host)
     }
 
     private func stopMonitoring(_ host: Host) {
-        timers[host.id]?.invalidate()
-        timers.removeValue(forKey: host.id)
+        sources[host.id]?.cancel()
+        sources.removeValue(forKey: host.id)
     }
+
+    // MARK: - Dashboard fast polling (1s)
+
+    func startDashboardPolling() {
+        stopDashboardPolling()
+        guard let id = selectedHostID, let host = hosts.first(where: { $0.id == id }) else { return }
+        dashboardSource = makeTimer(interval: 1.0) { [weak self] in self?.poll(host) }
+        poll(host)
+    }
+
+    func stopDashboardPolling() {
+        dashboardSource?.cancel()
+        dashboardSource = nil
+    }
+
+    // MARK: - Timer factory (DispatchSourceTimer — not blocked by NSMenu run loop)
+
+    private func makeTimer(interval: Double, handler: @escaping () -> Void) -> DispatchSourceTimer {
+        let source = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        source.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(50))
+        source.setEventHandler(handler: handler)
+        source.resume()
+        return source
+    }
+
+    // MARK: - Poll
 
     private func poll(_ host: Host) {
         switch host.method {
