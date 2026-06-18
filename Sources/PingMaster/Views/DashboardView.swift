@@ -152,8 +152,9 @@ struct DashboardView: View {
     }
 
     private func latencyColor(_ ms: Double) -> Color {
-        if ms < 50 { return .green }
-        if ms < 150 { return .orange }
+        let s = GlobalSettings.shared
+        if ms < s.greenThreshold  { return .green }
+        if ms < s.orangeThreshold { return .orange }
         return .red
     }
 

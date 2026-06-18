@@ -146,8 +146,9 @@ class SparklineMenuItemView: NSView {
     // MARK: - Helpers
 
     private func latencyColor(_ ms: Double) -> NSColor {
-        if ms < 50  { return .systemGreen }
-        if ms < 150 { return .systemOrange }
+        let s = GlobalSettings.shared
+        if ms < s.greenThreshold  { return .systemGreen }
+        if ms < s.orangeThreshold { return .systemOrange }
         return .systemRed
     }
 
