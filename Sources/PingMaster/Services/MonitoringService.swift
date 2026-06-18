@@ -10,6 +10,7 @@ class MonitoringService: ObservableObject {
 
     @Published var hosts: [Host] = []
     @Published var latencyHistory: [UUID: [LatencyPoint]] = [:]
+    @Published var selectedHostID: UUID? = nil
 
     private var timers: [UUID: Timer] = [:]
     private let saveKey = "PingMasterHosts"
