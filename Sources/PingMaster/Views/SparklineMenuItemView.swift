@@ -2,8 +2,9 @@ import Cocoa
 
 class SparklineMenuItemView: NSView {
     private let host: Host
-    private let history: [LatencyPoint]
+    private var history: [LatencyPoint]
     private let onSelect: () -> Void
+    private var observer: NSObjectProtocol?
 
     private var isHighlighted = false
     private let barCount = 15
@@ -21,6 +22,18 @@ class SparklineMenuItemView: NSView {
         let sparkWidth = CGFloat(barCount) * (barWidth + barSpacing) - barSpacing
         let totalWidth = sidePadding + 14 + 6 + nameWidth + 8 + sparkWidth + 8 + latencyWidth + sidePadding
         super.init(frame: NSRect(x: 0, y: 0, width: totalWidth, height: 22))
+
+        observer = NotificationCenter.default.addObserver(
+            forName: .hostStatusChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.history = MonitoringService.shared.latencyHistory[self.host.id] ?? []
+            self.needsDisplay = true
+        }
+    }
+
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
     }
 
     required init?(coder: NSCoder) { fatalError() }
