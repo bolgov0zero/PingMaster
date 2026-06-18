@@ -7,7 +7,10 @@ struct DashboardView: View {
     var selectedHostID: Binding<UUID?> {
         Binding(
             get: { service.selectedHostID },
-            set: { service.selectedHostID = $0 }
+            set: {
+                service.selectedHostID = $0
+                service.startDashboardPolling()
+            }
         )
     }
 
@@ -144,6 +147,8 @@ struct DashboardView: View {
             Spacer()
         }
         .padding(20)
+        .onAppear { service.startDashboardPolling() }
+        .onDisappear { service.stopDashboardPolling() }
     }
 
     private func latencyColor(_ ms: Double) -> Color {

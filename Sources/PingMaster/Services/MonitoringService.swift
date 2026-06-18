@@ -13,8 +13,9 @@ class MonitoringService: ObservableObject {
     @Published var selectedHostID: UUID? = nil
 
     private var timers: [UUID: Timer] = [:]
+    private var dashboardTimer: Timer?
     private let saveKey = "PingMasterHosts"
-    private let maxHistoryPoints = 60
+    private let maxHistoryPoints = 120
     private var settingsCancellable: AnyCancellable?
 
     private init() {
@@ -51,6 +52,22 @@ class MonitoringService: ObservableObject {
 
     func pingAll() {
         hosts.forEach { poll($0) }
+    }
+
+    // MARK: - Dashboard fast polling (1s)
+
+    func startDashboardPolling() {
+        stopDashboardPolling()
+        guard let id = selectedHostID, let host = hosts.first(where: { $0.id == id }) else { return }
+        dashboardTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.poll(host)
+        }
+        poll(host)
+    }
+
+    func stopDashboardPolling() {
+        dashboardTimer?.invalidate()
+        dashboardTimer = nil
     }
 
     // MARK: - Monitoring
