@@ -7,7 +7,6 @@ struct HostEditView: View {
     @State private var name: String = ""
     @State private var address: String = ""
     @State private var method: PollMethod = .ping
-    @State private var interval: Double = 30
     @State private var failThreshold: Int = 3
 
     var isEditing: Bool { host != nil }
@@ -37,19 +36,8 @@ struct HostEditView: View {
                     .labelsHidden()
                 }
                 GridRow {
-                    Text("Интервал").gridColumnAlignment(.trailing)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Slider(value: $interval, in: 5...300, step: 5)
-                        Text(formatInterval(interval))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                GridRow {
                     Text("Порог").gridColumnAlignment(.trailing)
-                    HStack {
-                        Stepper("\(failThreshold) неудачных подряд", value: $failThreshold, in: 1...10)
-                    }
+                    Stepper("\(failThreshold) неудачных подряд", value: $failThreshold, in: 1...10)
                 }
             }
 
@@ -69,7 +57,7 @@ struct HostEditView: View {
             }
         }
         .padding(24)
-        .frame(width: 440, height: 320)
+        .frame(width: 420, height: 260)
         .onAppear { loadHost() }
     }
 
@@ -78,7 +66,6 @@ struct HostEditView: View {
         name = h.name
         address = h.address
         method = h.method
-        interval = h.interval
         failThreshold = h.failThreshold
     }
 
@@ -88,7 +75,6 @@ struct HostEditView: View {
             h.name = name.trimmingCharacters(in: .whitespaces)
             h.address = address.trimmingCharacters(in: .whitespaces)
             h.method = method
-            h.interval = interval
             h.failThreshold = failThreshold
             service.update(h)
         } else {
@@ -96,16 +82,8 @@ struct HostEditView: View {
                 name: name.trimmingCharacters(in: .whitespaces),
                 address: address.trimmingCharacters(in: .whitespaces),
                 method: method,
-                interval: interval,
                 failThreshold: failThreshold
             ))
         }
-    }
-
-    private func formatInterval(_ seconds: Double) -> String {
-        if seconds < 60 { return "\(Int(seconds)) секунд" }
-        let m = Int(seconds / 60)
-        let s = Int(seconds) % 60
-        return s == 0 ? "\(m) минут" : "\(m) мин \(s) сек"
     }
 }

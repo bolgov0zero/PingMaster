@@ -3,7 +3,7 @@ import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
-    var settingsWindow: NSWindow?
+    var mainWindow: NSWindow?
     let monitoringService = MonitoringService.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -26,8 +26,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func updateStatusIcon() {
-        let allAvailable = monitoringService.hosts.allSatisfy { $0.isAvailable }
-        let color: NSColor = monitoringService.hosts.isEmpty || allAvailable ? .systemGreen : .systemRed
+        let hosts = monitoringService.hosts
+        let color: NSColor
+        if hosts.isEmpty {
+            color = .white
+        } else if hosts.allSatisfy({ $0.isAvailable }) {
+            color = .systemGreen
+        } else {
+            color = .systemRed
+        }
 
         let size = NSSize(width: 16, height: 16)
         let image = NSImage(size: size)
@@ -48,6 +55,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func dotImage(available: Bool) -> NSImage {
+        let size = NSSize(width: 12, height: 12)
+        let img = NSImage(size: size)
+        img.lockFocus()
+        (available ? NSColor.systemGreen : NSColor.systemRed).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 1, y: 1, width: 10, height: 10)).fill()
+        img.unlockFocus()
+        img.isTemplate = false
+        return img
+    }
+
     private func showLeftMenu() {
         let menu = NSMenu()
         let hosts = monitoringService.hosts
@@ -58,13 +76,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(item)
         } else {
             for host in hosts {
-                let dot = host.isAvailable ? "🟢" : "🔴"
-                let latency = host.lastLatency.map { String(format: " — %.0f ms", $0) } ?? " — –"
-                let title = "\(dot)  \(host.name)\(latency)"
+                let latency = host.lastLatency.map { String(format: "%.0f ms", $0) } ?? "–"
+                let title = "\(host.name)  \(latency)"
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.image = dotImage(available: host.isAvailable)
                 item.isEnabled = false
                 menu.addItem(item)
             }
+            menu.addItem(NSMenuItem.separator())
+            menu.addItem(NSMenuItem(title: "Ping все", action: #selector(forcePing), keyEquivalent: ""))
         }
 
         statusItem?.menu = menu
@@ -74,7 +94,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showRightMenu() {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Настройки...", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Настройки...", action: #selector(openMain), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Выход", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
@@ -83,20 +103,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.menu = nil
     }
 
-    @objc func openSettings() {
-        if settingsWindow == nil {
-            settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 600, height: 450),
+    @objc func forcePing() {
+        monitoringService.pingAll()
+    }
+
+    @objc func openMain() {
+        if mainWindow == nil {
+            mainWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
                 styleMask: [.titled, .closable, .resizable, .miniaturizable],
                 backing: .buffered,
                 defer: false
             )
-            settingsWindow?.title = "PingMaster"
-            settingsWindow?.contentView = NSHostingView(rootView: SettingsView())
-            settingsWindow?.center()
-            settingsWindow?.isReleasedWhenClosed = false
+            mainWindow?.title = "PingMaster"
+            mainWindow?.contentView = NSHostingView(rootView: MainTabView())
+            mainWindow?.center()
+            mainWindow?.isReleasedWhenClosed = false
         }
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        mainWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

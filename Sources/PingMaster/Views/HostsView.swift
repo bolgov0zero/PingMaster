@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct SettingsView: View {
+struct HostsView: View {
     @ObservedObject var service = MonitoringService.shared
     @State private var showAddSheet = false
     @State private var editingHost: Host? = nil
@@ -31,7 +31,6 @@ struct SettingsView: View {
             }
             .padding(10)
         }
-        .frame(minWidth: 550, minHeight: 380)
         .sheet(isPresented: $showAddSheet) {
             HostEditView(host: nil)
         }
@@ -61,16 +60,11 @@ struct HostRow: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            Text("каждые \(formatInterval(host.interval))")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(width: 80, alignment: .trailing)
-
             Group {
                 if let latency = host.lastLatency {
                     Text(String(format: "%.0f ms", latency))
                 } else {
-                    Text("—")
+                    Text("–")
                 }
             }
             .font(.caption.monospacedDigit())
@@ -78,12 +72,5 @@ struct HostRow: View {
             .frame(width: 55, alignment: .trailing)
         }
         .padding(.vertical, 4)
-    }
-
-    func formatInterval(_ seconds: Double) -> String {
-        if seconds < 60 { return "\(Int(seconds)) с" }
-        let m = Int(seconds / 60)
-        let s = Int(seconds) % 60
-        return s == 0 ? "\(m) мин" : "\(m)м \(s)с"
     }
 }

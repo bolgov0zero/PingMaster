@@ -6,12 +6,17 @@ enum PollMethod: String, Codable, CaseIterable {
     case https = "HTTPS"
 }
 
+struct LatencyPoint: Identifiable {
+    let id = UUID()
+    let timestamp: Date
+    let value: Double  // ms, nil-safe: timeouts not stored
+}
+
 class Host: ObservableObject, Identifiable, Codable {
     let id: UUID
     @Published var name: String
     @Published var address: String
     @Published var method: PollMethod
-    @Published var interval: Double  // seconds
     @Published var failThreshold: Int
 
     @Published var isAvailable: Bool = true
@@ -19,17 +24,16 @@ class Host: ObservableObject, Identifiable, Codable {
     @Published var consecutiveFailures: Int = 0
 
     init(id: UUID = UUID(), name: String, address: String,
-         method: PollMethod = .ping, interval: Double = 30, failThreshold: Int = 3) {
+         method: PollMethod = .ping, failThreshold: Int = 3) {
         self.id = id
         self.name = name
         self.address = address
         self.method = method
-        self.interval = interval
         self.failThreshold = failThreshold
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, address, method, interval, failThreshold
+        case id, name, address, method, failThreshold
     }
 
     required init(from decoder: Decoder) throws {
@@ -38,8 +42,7 @@ class Host: ObservableObject, Identifiable, Codable {
         name = try c.decode(String.self, forKey: .name)
         address = try c.decode(String.self, forKey: .address)
         method = try c.decode(PollMethod.self, forKey: .method)
-        interval = try c.decode(Double.self, forKey: .interval)
-        failThreshold = try c.decode(Int.self, forKey: .failThreshold)
+        failThreshold = try c.decodeIfPresent(Int.self, forKey: .failThreshold) ?? 3
     }
 
     func encode(to encoder: Encoder) throws {
@@ -48,7 +51,6 @@ class Host: ObservableObject, Identifiable, Codable {
         try c.encode(name, forKey: .name)
         try c.encode(address, forKey: .address)
         try c.encode(method, forKey: .method)
-        try c.encode(interval, forKey: .interval)
         try c.encode(failThreshold, forKey: .failThreshold)
     }
 }

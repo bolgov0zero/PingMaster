@@ -9,21 +9,34 @@ class MonitoringService: ObservableObject {
     static let shared = MonitoringService()
 
     @Published var hosts: [Host] = []
+    @Published var latencyHistory: [UUID: [LatencyPoint]] = [:]
+
     private var timers: [UUID: Timer] = [:]
     private let saveKey = "PingMasterHosts"
+    private let maxHistoryPoints = 60
+    private var settingsCancellable: AnyCancellable?
 
     private init() {
         load()
+        settingsCancellable = GlobalSettings.shared.$interval
+            .dropFirst()
+            .sink { [weak self] _ in self?.restartAll() }
     }
+
+    // MARK: - Host Management
 
     func add(_ host: Host) {
         hosts.append(host)
+        latencyHistory[host.id] = []
         save()
         startMonitoring(host)
     }
 
     func remove(at offsets: IndexSet) {
-        offsets.forEach { stopMonitoring(hosts[$0]) }
+        offsets.forEach {
+            stopMonitoring(hosts[$0])
+            latencyHistory.removeValue(forKey: hosts[$0].id)
+        }
         hosts.remove(atOffsets: offsets)
         save()
     }
@@ -34,13 +47,27 @@ class MonitoringService: ObservableObject {
         startMonitoring(host)
     }
 
+    func pingAll() {
+        hosts.forEach { poll($0) }
+    }
+
+    // MARK: - Monitoring
+
     func startAll() {
         hosts.forEach { startMonitoring($0) }
     }
 
+    private func restartAll() {
+        hosts.forEach {
+            stopMonitoring($0)
+            startMonitoring($0)
+        }
+    }
+
     private func startMonitoring(_ host: Host) {
         stopMonitoring(host)
-        let timer = Timer.scheduledTimer(withTimeInterval: host.interval, repeats: true) { [weak self] _ in
+        let interval = GlobalSettings.shared.interval
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.poll(host)
         }
         timers[host.id] = timer
@@ -66,20 +93,27 @@ class MonitoringService: ObservableObject {
     }
 
     private func handleResult(host: Host, latency: Double?) {
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             host.lastLatency = latency
-            if latency == nil {
+            if let ms = latency {
+                var history = self.latencyHistory[host.id] ?? []
+                history.append(LatencyPoint(timestamp: Date(), value: ms))
+                if history.count > self.maxHistoryPoints { history.removeFirst() }
+                self.latencyHistory[host.id] = history
+                host.consecutiveFailures = 0
+                host.isAvailable = true
+            } else {
                 host.consecutiveFailures += 1
                 if host.consecutiveFailures >= host.failThreshold {
                     host.isAvailable = false
                 }
-            } else {
-                host.consecutiveFailures = 0
-                host.isAvailable = true
             }
             NotificationCenter.default.post(name: .hostStatusChanged, object: nil)
         }
     }
+
+    // MARK: - Persistence
 
     func save() {
         if let data = try? JSONEncoder().encode(hosts) {
@@ -91,5 +125,6 @@ class MonitoringService: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: saveKey),
               let loaded = try? JSONDecoder().decode([Host].self, from: data) else { return }
         hosts = loaded
+        hosts.forEach { latencyHistory[$0.id] = [] }
     }
 }
