@@ -85,13 +85,21 @@ class MonitoringService: ObservableObject {
     func startDashboardPolling() {
         stopDashboardPolling()
         guard let id = selectedHostID, let host = hosts.first(where: { $0.id == id }) else { return }
+        // Pause the regular timer for this host to avoid double-polling
+        sources[id]?.cancel()
+        sources.removeValue(forKey: id)
         dashboardSource = makeTimer(interval: 1.0) { [weak self] in self?.poll(host) }
         poll(host)
     }
 
     func stopDashboardPolling() {
+        guard dashboardSource != nil else { return }
         dashboardSource?.cancel()
         dashboardSource = nil
+        // Restore regular timer for the previously selected host
+        if let id = selectedHostID, let host = hosts.first(where: { $0.id == id }) {
+            startMonitoring(host)
+        }
     }
 
     // MARK: - Timer factory (DispatchSourceTimer — not blocked by NSMenu run loop)

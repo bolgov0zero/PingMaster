@@ -126,8 +126,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             mainWindow?.contentView = NSHostingView(rootView: MainTabView())
             mainWindow?.center()
             mainWindow?.isReleasedWhenClosed = false
+            mainWindow?.delegate = self
         }
         mainWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        MonitoringService.shared.stopDashboardPolling()
     }
 }
