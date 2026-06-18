@@ -29,12 +29,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let allAvailable = monitoringService.hosts.allSatisfy { $0.isAvailable }
         let color: NSColor = monitoringService.hosts.isEmpty || allAvailable ? .systemGreen : .systemRed
 
-        let size = CGSize(width: 12, height: 12)
-        let image = NSImage(size: size, flipped: false) { rect in
-            color.setFill()
-            NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
-            return true
-        }
+        let size = NSSize(width: 16, height: 16)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        color.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 2, y: 2, width: 12, height: 12)).fill()
+        image.unlockFocus()
         image.isTemplate = false
         statusItem?.button?.image = image
     }
