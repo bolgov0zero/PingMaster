@@ -1,0 +1,7 @@
+.build/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+.DS_Store
+dmg_tmp/
+build/
+*.dmg
