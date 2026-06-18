@@ -42,11 +42,6 @@ struct DashboardView: View {
                     }
                 }
                 .frame(width: 200)
-                .onAppear {
-                    if service.selectedHostID == nil {
-                        service.selectedHostID = service.hosts.first?.id
-                    }
-                }
             }
 
             // Chart
@@ -119,8 +114,14 @@ struct DashboardView: View {
             Spacer()
         }
         .padding(20)
-        .onAppear { service.startDashboardPolling() }
+        .onAppear {
+            if service.selectedHostID == nil {
+                service.selectedHostID = service.hosts.first?.id
+            }
+            service.startDashboardPolling()
+        }
         .onDisappear { service.stopDashboardPolling() }
+        .onChange(of: service.selectedHostID) { _ in service.startDashboardPolling() }
     }
 
     private func latencyColor(_ ms: Double) -> Color {

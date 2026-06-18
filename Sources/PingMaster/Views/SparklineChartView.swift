@@ -18,10 +18,6 @@ struct SparklineChartView: View {
             let barW = n > 0 ? max(4, (w - CGFloat(n - 1) * barGap) / CGFloat(n)) : 8
 
             ZStack(alignment: .topLeading) {
-                // Threshold lines
-                thresholdLine(val: greenThreshold,  max: maxVal, h: chartH, color: .green,  w: w)
-                thresholdLine(val: orangeThreshold, max: maxVal, h: chartH, color: .orange, w: w)
-
                 // Bars
                 Canvas { ctx, _ in
                     for (i, point) in points.enumerated() {
@@ -62,14 +58,6 @@ struct SparklineChartView: View {
                 .frame(height: chartH)
             }
         }
-    }
-
-    @ViewBuilder
-    private func thresholdLine(val: Double, max: Double, h: CGFloat, color: Color, w: CGFloat) -> some View {
-        let y = h - CGFloat(val / max) * h
-        color.opacity(0.35)
-            .frame(width: w, height: 1)
-            .offset(y: y)
     }
 
     private func barColor(_ ms: Double) -> Color {
