@@ -8,6 +8,7 @@ struct HostEditView: View {
     @State private var address: String = ""
     @State private var method: PollMethod = .ping
     @State private var failThreshold: Int = 3
+    @State private var showInMenu: Bool = true
 
     var isEditing: Bool { host != nil }
 
@@ -39,6 +40,10 @@ struct HostEditView: View {
                     Text("Порог").gridColumnAlignment(.trailing)
                     Stepper("\(failThreshold) неудачных подряд", value: $failThreshold, in: 1...10)
                 }
+                GridRow {
+                    Text("").gridColumnAlignment(.trailing)
+                    Toggle("Показывать в меню панели", isOn: $showInMenu)
+                }
             }
 
             Spacer()
@@ -57,7 +62,7 @@ struct HostEditView: View {
             }
         }
         .padding(24)
-        .frame(width: 420, height: 260)
+        .frame(width: 420, height: 300)
         .onAppear { loadHost() }
     }
 
@@ -67,6 +72,7 @@ struct HostEditView: View {
         address = h.address
         method = h.method
         failThreshold = h.failThreshold
+        showInMenu = h.showInMenu
     }
 
     private func save() {
@@ -76,13 +82,15 @@ struct HostEditView: View {
             h.address = address.trimmingCharacters(in: .whitespaces)
             h.method = method
             h.failThreshold = failThreshold
+            h.showInMenu = showInMenu
             service.update(h)
         } else {
             service.add(Host(
                 name: name.trimmingCharacters(in: .whitespaces),
                 address: address.trimmingCharacters(in: .whitespaces),
                 method: method,
-                failThreshold: failThreshold
+                failThreshold: failThreshold,
+                showInMenu: showInMenu
             ))
         }
     }

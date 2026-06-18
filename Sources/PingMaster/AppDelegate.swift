@@ -68,7 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showLeftMenu() {
         let menu = NSMenu()
-        let hosts = monitoringService.hosts
+        let hosts = monitoringService.hosts.filter { $0.showInMenu }
 
         if hosts.isEmpty {
             let item = NSMenuItem(title: "Нет хостов", action: nil, keyEquivalent: "")
@@ -78,9 +78,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             for host in hosts {
                 let latency = host.lastLatency.map { String(format: "%.0f ms", $0) } ?? "–"
                 let title = "\(host.name)  \(latency)"
-                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                let item = NSMenuItem(title: title, action: #selector(openTerminalPing(_:)), keyEquivalent: "")
                 item.image = dotImage(available: host.isAvailable)
-                item.isEnabled = false
+                item.representedObject = host.address
                 menu.addItem(item)
             }
             menu.addItem(NSMenuItem.separator())
@@ -105,6 +105,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func forcePing() {
         monitoringService.pingAll()
+    }
+
+    @objc func openTerminalPing(_ sender: NSMenuItem) {
+        guard let address = sender.representedObject as? String else { return }
+        let script = "tell application \"Terminal\" to do script \"ping \(address)\"\ntell application \"Terminal\" to activate"
+        NSAppleScript(source: script)?.executeAndReturnError(nil)
     }
 
     @objc func openMain() {

@@ -18,22 +18,24 @@ class Host: ObservableObject, Identifiable, Codable {
     @Published var address: String
     @Published var method: PollMethod
     @Published var failThreshold: Int
+    @Published var showInMenu: Bool
 
     @Published var isAvailable: Bool = true
     @Published var lastLatency: Double? = nil
     @Published var consecutiveFailures: Int = 0
 
     init(id: UUID = UUID(), name: String, address: String,
-         method: PollMethod = .ping, failThreshold: Int = 3) {
+         method: PollMethod = .ping, failThreshold: Int = 3, showInMenu: Bool = true) {
         self.id = id
         self.name = name
         self.address = address
         self.method = method
         self.failThreshold = failThreshold
+        self.showInMenu = showInMenu
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, address, method, failThreshold
+        case id, name, address, method, failThreshold, showInMenu
     }
 
     required init(from decoder: Decoder) throws {
@@ -43,6 +45,7 @@ class Host: ObservableObject, Identifiable, Codable {
         address = try c.decode(String.self, forKey: .address)
         method = try c.decode(PollMethod.self, forKey: .method)
         failThreshold = try c.decodeIfPresent(Int.self, forKey: .failThreshold) ?? 3
+        showInMenu = try c.decodeIfPresent(Bool.self, forKey: .showInMenu) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -52,5 +55,6 @@ class Host: ObservableObject, Identifiable, Codable {
         try c.encode(address, forKey: .address)
         try c.encode(method, forKey: .method)
         try c.encode(failThreshold, forKey: .failThreshold)
+        try c.encode(showInMenu, forKey: .showInMenu)
     }
 }

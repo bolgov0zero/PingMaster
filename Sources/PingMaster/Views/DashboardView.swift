@@ -11,7 +11,8 @@ struct DashboardView: View {
 
     var history: [LatencyPoint] {
         guard let id = selectedHostID else { return [] }
-        return service.latencyHistory[id] ?? []
+        let cutoff = Date().addingTimeInterval(-60)
+        return (service.latencyHistory[id] ?? []).filter { $0.timestamp >= cutoff }
     }
 
     var body: some View {
