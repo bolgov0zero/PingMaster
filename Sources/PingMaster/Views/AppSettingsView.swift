@@ -25,27 +25,15 @@ struct AppSettingsView: View {
             }
 
             Section("Пороги задержки") {
-                VStack(alignment: .leading, spacing: 12) {
-                    ThresholdRow(
-                        color: .green,
-                        label: "Зелёный — до",
-                        value: $settings.greenThreshold,
-                        range: 1...Double(settings.orangeThreshold - 1)
-                    )
-                    ThresholdRow(
-                        color: .orange,
-                        label: "Оранжевый — до",
-                        value: $settings.orangeThreshold,
-                        range: Double(settings.greenThreshold + 1)...999
-                    )
-                    HStack {
-                        Circle().fill(Color.red).frame(width: 10, height: 10)
-                        Text("Красный — от \(Int(settings.orangeThreshold)) мс и выше")
-                            .foregroundColor(.secondary)
-                    }
-                    .font(.caption)
+                ThresholdInputRow(color: .green,  label: "Зелёный — до",     value: $settings.greenThreshold)
+                ThresholdInputRow(color: .orange, label: "Оранжевый — до",   value: $settings.orangeThreshold)
+                HStack {
+                    Circle().fill(Color.red).frame(width: 10, height: 10)
+                    Text("Красный — от \(Int(settings.orangeThreshold)) мс и выше")
+                        .foregroundColor(.secondary)
+                        .font(.callout)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
 
             Section("Система") {
@@ -81,25 +69,33 @@ struct AppSettingsView: View {
     }
 }
 
-struct ThresholdRow: View {
+struct ThresholdInputRow: View {
     let color: Color
     let label: String
     @Binding var value: Double
-    let range: ClosedRange<Double>
+    @State private var text: String = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Circle().fill(color).frame(width: 10, height: 10)
-                Text(label)
-                Spacer()
-                Text("\(Int(value)) мс")
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 60, alignment: .trailing)
-            }
-            Slider(value: $value, in: range, step: 5)
+        HStack {
+            Circle().fill(color).frame(width: 10, height: 10)
+            Text(label)
+            Spacer()
+            TextField("мс", text: $text)
+                .frame(width: 70)
+                .multilineTextAlignment(.trailing)
+                .onAppear { text = "\(Int(value))" }
+                .onSubmit { commit() }
+                .onChange(of: text) { _ in }
+            Text("мс").foregroundColor(.secondary)
         }
-        .font(.caption)
+        .padding(.vertical, 2)
+    }
+
+    private func commit() {
+        if let v = Double(text.trimmingCharacters(in: .whitespaces)), v > 0 {
+            value = v
+        } else {
+            text = "\(Int(value))"
+        }
     }
 }
