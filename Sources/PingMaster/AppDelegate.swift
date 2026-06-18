@@ -76,11 +76,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(item)
         } else {
             for host in hosts {
-                let latency = host.lastLatency.map { String(format: "%.0f ms", $0) } ?? "–"
-                let title = "\(host.name)  \(latency)"
-                let item = NSMenuItem(title: title, action: #selector(openTerminalPing(_:)), keyEquivalent: "")
-                item.image = dotImage(available: host.isAvailable)
-                item.representedObject = host.address
+                let history = monitoringService.latencyHistory[host.id] ?? []
+                let item = NSMenuItem()
+                let address = host.address
+                let view = SparklineMenuItemView(host: host, history: history) { [weak self] in
+                    self?.openTerminalForAddress(address)
+                }
+                item.view = view
                 menu.addItem(item)
             }
             menu.addItem(NSMenuItem.separator())
@@ -107,8 +109,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         monitoringService.pingAll()
     }
 
-    @objc func openTerminalPing(_ sender: NSMenuItem) {
-        guard let address = sender.representedObject as? String else { return }
+    func openTerminalForAddress(_ address: String) {
         let script = "tell application \"Terminal\" to do script \"ping \(address)\"\ntell application \"Terminal\" to activate"
         NSAppleScript(source: script)?.executeAndReturnError(nil)
     }
