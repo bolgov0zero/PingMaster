@@ -4,7 +4,7 @@ class SparklineMenuItemView: NSView {
     private let host: Host
     private var history: [LatencyPoint]
     private let onSelect: () -> Void
-    private var observer: NSObjectProtocol?
+    private var refreshTimer: Timer?
 
     private var isHighlighted = false
     private let barCount = 15
@@ -22,18 +22,27 @@ class SparklineMenuItemView: NSView {
         let sparkWidth = CGFloat(barCount) * (barWidth + barSpacing) - barSpacing
         let totalWidth = sidePadding + 14 + 6 + nameWidth + 8 + sparkWidth + 8 + latencyWidth + sidePadding
         super.init(frame: NSRect(x: 0, y: 0, width: totalWidth, height: 22))
-
-        observer = NotificationCenter.default.addObserver(
-            forName: .hostStatusChanged, object: nil, queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-            self.history = MonitoringService.shared.latencyHistory[self.host.id] ?? []
-            self.needsDisplay = true
-        }
     }
 
     deinit {
-        if let observer { NotificationCenter.default.removeObserver(observer) }
+        refreshTimer?.invalidate()
+    }
+
+    // Start/stop refresh timer when view enters/leaves the menu window.
+    // Timer uses .common mode so it fires during NSMenu's eventTracking run loop.
+    override func viewDidMoveToWindow() {
+        if window != nil {
+            let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                self.history = MonitoringService.shared.latencyHistory[self.host.id] ?? []
+                self.needsDisplay = true
+            }
+            RunLoop.main.add(t, forMode: .common)
+            refreshTimer = t
+        } else {
+            refreshTimer?.invalidate()
+            refreshTimer = nil
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
