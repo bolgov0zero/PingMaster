@@ -1,5 +1,7 @@
 import SwiftUI
 import ServiceManagement
+import AppKit
+import UniformTypeIdentifiers
 
 struct AppSettingsView: View {
     @ObservedObject var settings = GlobalSettings.shared
@@ -36,6 +38,25 @@ struct AppSettingsView: View {
                         .foregroundColor(.secondary)
                 }
 
+                SectionCard(title: "Хосты") {
+                    HStack {
+                        Button {
+                            exportHosts()
+                        } label: {
+                            Label("Экспорт…", systemImage: "square.and.arrow.up")
+                        }
+                        Button {
+                            importHosts()
+                        } label: {
+                            Label("Импорт…", systemImage: "square.and.arrow.down")
+                        }
+                        Spacer()
+                    }
+                    Text("Сохранение и загрузка списка хостов в формате JSON. Импорт добавляет хосты к текущим.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 SectionCard(title: "Пороги задержки") {
                     ThresholdInputRow(color: .green,  label: "Зелёный — до", value: $settings.greenThreshold)
                     Divider()
@@ -53,6 +74,26 @@ struct AppSettingsView: View {
             .padding(16)
         }
         .onAppear { launchAtLogin = getLaunchAtLoginStatus() }
+    }
+
+    private func exportHosts() {
+        guard let data = MonitoringService.shared.exportHostsData() else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "pingmaster-hosts.json"
+        if panel.runModal() == .OK, let url = panel.url {
+            try? data.write(to: url)
+        }
+    }
+
+    private func importHosts() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url,
+           let data = try? Data(contentsOf: url) {
+            MonitoringService.shared.importHosts(from: data)
+        }
     }
 
     private func getLaunchAtLoginStatus() -> Bool {

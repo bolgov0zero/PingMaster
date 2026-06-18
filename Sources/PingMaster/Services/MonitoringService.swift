@@ -86,6 +86,26 @@ class MonitoringService: ObservableObject {
         save()
     }
 
+    // MARK: - Export / Import
+
+    func exportHostsData() -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try? encoder.encode(hosts)
+    }
+
+    /// Imports hosts from JSON, appending them with fresh IDs (non-destructive,
+    /// avoids ID collisions). Returns the number of hosts added.
+    @discardableResult
+    func importHosts(from data: Data) -> Int {
+        guard let decoded = try? JSONDecoder().decode([Host].self, from: data) else { return 0 }
+        for h in decoded {
+            add(Host(name: h.name, address: h.address, method: h.method,
+                     failThreshold: h.failThreshold, showInMenu: h.showInMenu))
+        }
+        return decoded.count
+    }
+
     // MARK: - Monitoring
 
     func startAll() {
