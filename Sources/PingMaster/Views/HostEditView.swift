@@ -17,7 +17,7 @@ struct HostEditView: View {
             Text(isEditing ? "Редактировать хост" : "Добавить хост")
                 .font(.title2).bold()
 
-            Grid(alignment: .leading, columnSpacing: 12, rowSpacing: 12) {
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
                     Text("Имя").gridColumnAlignment(.trailing)
                     TextField("Например: Google DNS", text: $name)
