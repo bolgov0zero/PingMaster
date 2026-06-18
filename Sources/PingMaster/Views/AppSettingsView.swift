@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct AppSettingsView: View {
     @ObservedObject var settings = GlobalSettings.shared
     @State private var launchAtLogin: Bool = false
+    @State private var showClearConfirm = false
 
     var body: some View {
         ScrollView {
@@ -57,6 +58,21 @@ struct AppSettingsView: View {
                         .foregroundColor(.secondary)
                 }
 
+                SectionCard(title: "Данные") {
+                    HStack {
+                        Button(role: .destructive) {
+                            showClearConfirm = true
+                        } label: {
+                            Label("Очистить данные", systemImage: "trash")
+                        }
+                        .foregroundColor(.red)
+                        Spacer()
+                    }
+                    Text("Удаляет всю историю задержек и тепловую карту по всем хостам. Сами хосты сохраняются.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 SectionCard(title: "Пороги задержки") {
                     ThresholdInputRow(color: .green,  label: "Зелёный — до", value: $settings.greenThreshold)
                     Divider()
@@ -74,6 +90,15 @@ struct AppSettingsView: View {
             .padding(16)
         }
         .onAppear { launchAtLogin = getLaunchAtLoginStatus() }
+        .confirmationDialog("Очистить все данные по хостам?",
+                            isPresented: $showClearConfirm, titleVisibility: .visible) {
+            Button("Очистить", role: .destructive) {
+                MonitoringService.shared.clearAllData()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("История задержек и тепловая карта будут удалены. Хосты останутся.")
+        }
     }
 
     private func exportHosts() {

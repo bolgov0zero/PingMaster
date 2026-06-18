@@ -61,7 +61,10 @@ class MonitoringService: ObservableObject {
         offsets.forEach {
             stopMonitoring(hosts[$0])
             latencyHistory.removeValue(forKey: hosts[$0].id)
+            availabilityLog.removeValue(forKey: hosts[$0].id)
             UptimeStore.shared.clear(hostID: hosts[$0].id)
+            LatencyStore.shared.clear(hostID: hosts[$0].id)
+            EventLog.shared.clear(hostID: hosts[$0].id)
         }
         hosts.remove(atOffsets: offsets)
         save()
@@ -182,10 +185,12 @@ class MonitoringService: ObservableObject {
                 history.append(LatencyPoint(timestamp: Date(), value: ms))
                 if history.count > self.maxHistoryPoints { history.removeFirst() }
                 self.latencyHistory[host.id] = history
+                LatencyStore.shared.record(hostID: host.id, ms: ms)
                 host.consecutiveFailures = 0
                 host.isAvailable = true
                 if !wasAvailable {
                     NotificationManager.shared.notifyUp(host: host)
+                    EventLog.shared.record(hostID: host.id, hostName: host.name, up: true)
                 }
             } else {
                 host.consecutiveFailures += 1
@@ -193,6 +198,7 @@ class MonitoringService: ObservableObject {
                     host.isAvailable = false
                     if wasAvailable {
                         NotificationManager.shared.notifyDown(host: host)
+                        EventLog.shared.record(hostID: host.id, hostName: host.name, up: false)
                     }
                 }
             }
@@ -211,6 +217,21 @@ class MonitoringService: ObservableObject {
 
         // Persist hourly aggregation for the heatmap.
         UptimeStore.shared.record(hostID: host.id, up: up)
+    }
+
+    // MARK: - Data management
+
+    func clearAllData() {
+        LatencyStore.shared.clearAll()
+        UptimeStore.shared.clearAll()
+        EventLog.shared.clearAll()
+        availabilityLog.removeAll()
+        for host in hosts {
+            latencyHistory[host.id] = []
+            host.lastLatency = nil
+            host.consecutiveFailures = 0
+        }
+        NotificationCenter.default.post(name: .hostStatusChanged, object: nil)
     }
 
     // MARK: - SSL certificate

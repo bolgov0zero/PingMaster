@@ -9,6 +9,9 @@ struct MainTabView: View {
             HostsView()
                 .tabItem { Label("Хосты", systemImage: "server.rack") }
 
+            LogView()
+                .tabItem { Label("Лог", systemImage: "list.bullet.rectangle") }
+
             AppSettingsView()
                 .tabItem { Label("Настройки", systemImage: "gear") }
         }

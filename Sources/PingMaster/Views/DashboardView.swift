@@ -4,6 +4,7 @@ import AppKit
 struct DashboardView: View {
     @ObservedObject var service = MonitoringService.shared
     @ObservedObject var settings = GlobalSettings.shared
+    @State private var period: ChartPeriod = .online
 
     var selectedHost: Host? {
         service.hosts.first { $0.id == service.selectedHostID }
@@ -204,22 +205,73 @@ struct DashboardView: View {
 
     // MARK: - Chart card
 
+    private var onlineSeries: [LatencyPoint] {
+        guard let id = service.selectedHostID else { return [] }
+        return service.latencyHistory[id] ?? []
+    }
+
+    private var slottedSeries: [LatencyPoint?] {
+        guard let id = service.selectedHostID else { return [] }
+        _ = service.latencyHistory[id]?.count  // re-render on each poll
+        return LatencyStore.shared.slottedSeries(hostID: id, period: period)
+    }
+
     private var chartCard: some View {
         card(fill: true) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Задержка").font(.headline)
-                if history.isEmpty {
-                    emptyState(icon: "chart.bar.xaxis", title: "Нет данных",
-                               subtitle: "Ожидание первого опроса...")
-                } else {
-                    SparklineChartView(
-                        points: history,
-                        greenThreshold: settings.greenThreshold,
-                        orangeThreshold: settings.orangeThreshold
-                    )
-                    .frame(maxHeight: .infinity)
+                HStack {
+                    Text("Задержка").font(.headline)
+                    Spacer()
+                    Picker("", selection: $period) {
+                        ForEach(ChartPeriod.allCases) { p in Text(p.rawValue).tag(p) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
+                chartBody
             }
+        }
+    }
+
+    @ViewBuilder
+    private var chartBody: some View {
+        if period == .online {
+            if onlineSeries.isEmpty {
+                chartEmpty
+            } else {
+                SparklineChartView(points: onlineSeries,
+                                   greenThreshold: settings.greenThreshold,
+                                   orangeThreshold: settings.orangeThreshold,
+                                   dateStyle: tooltipStyle)
+                    .frame(maxHeight: .infinity)
+            }
+        } else {
+            let slots = slottedSeries
+            if slots.allSatisfy({ $0 == nil }) {
+                chartEmpty
+            } else {
+                SparklineChartView(points: [],
+                                   greenThreshold: settings.greenThreshold,
+                                   orangeThreshold: settings.orangeThreshold,
+                                   dateStyle: tooltipStyle,
+                                   slots: slots)
+                    .frame(maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var chartEmpty: some View {
+        emptyState(icon: "chart.bar.xaxis", title: "Нет данных",
+                   subtitle: "Ожидание первого опроса...")
+    }
+
+    private var tooltipStyle: Date.FormatStyle {
+        switch period {
+        case .online: return .dateTime.hour().minute().second()
+        case .day:    return .dateTime.hour().minute()
+        case .month:  return .dateTime.day().month()
+        case .year:   return .dateTime.month().year()
         }
     }
 

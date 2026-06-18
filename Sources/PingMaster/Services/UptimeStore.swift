@@ -12,7 +12,6 @@ final class UptimeStore {
     }
 
     private let key = "uptimeBuckets"
-    private let retentionDays = 14
     // hostID -> [hourEpochString: Bucket]
     private var buckets: [String: [String: Bucket]] = [:]
 
@@ -32,7 +31,6 @@ final class UptimeStore {
         if up { b.up += 1 }
         host[hour] = b
         buckets[hid] = host
-        prune()
         save()
     }
 
@@ -72,11 +70,9 @@ final class UptimeStore {
         save()
     }
 
-    private func prune() {
-        let cutoff = Self.hourIndex(Date()) - retentionDays * 24
-        for hid in buckets.keys {
-            buckets[hid] = buckets[hid]?.filter { (Int($0.key) ?? 0) >= cutoff }
-        }
+    func clearAll() {
+        buckets.removeAll()
+        save()
     }
 
     private func save() {
