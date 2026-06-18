@@ -9,10 +9,12 @@ struct HostsView: View {
         VStack(spacing: 0) {
             List {
                 ForEach(service.hosts) { host in
-                    HostRow(host: host)
-                        .onTapGesture(count: 2) { editingHost = host }
+                    HostRow(host: host, onEdit: { editingHost = host }, onDelete: {
+                        if let idx = service.hosts.firstIndex(where: { $0.id == host.id }) {
+                            service.remove(at: IndexSet(integer: idx))
+                        }
+                    })
                 }
-                .onDelete(perform: service.remove)
             }
             .listStyle(.inset)
 
@@ -25,9 +27,6 @@ struct HostsView: View {
                     Label("Добавить хост", systemImage: "plus")
                 }
                 Spacer()
-                Text("Двойной клик — редактировать")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
             .padding(10)
         }
@@ -42,6 +41,10 @@ struct HostsView: View {
 
 struct HostRow: View {
     @ObservedObject var host: Host
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -56,21 +59,40 @@ struct HostRow: View {
 
             Spacer()
 
-            Text(host.method.rawValue)
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Group {
-                if let latency = host.lastLatency {
-                    Text(String(format: "%.0f ms", latency))
-                } else {
-                    Text("–")
+            if isHovered {
+                Button(action: onEdit) {
+                    Label("Изменить", systemImage: "pencil")
+                        .labelStyle(.iconOnly)
                 }
+                .buttonStyle(.borderless)
+                .help("Редактировать")
+
+                Button(action: onDelete) {
+                    Label("Удалить", systemImage: "trash")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .foregroundColor(.red)
+                .help("Удалить")
+            } else {
+                Text(host.method.rawValue)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Group {
+                    if let latency = host.lastLatency {
+                        Text(String(format: "%.0f ms", latency))
+                    } else {
+                        Text("–")
+                    }
+                }
+                .font(.caption.monospacedDigit())
+                .foregroundColor(.secondary)
+                .frame(width: 55, alignment: .trailing)
             }
-            .font(.caption.monospacedDigit())
-            .foregroundColor(.secondary)
-            .frame(width: 55, alignment: .trailing)
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
     }
 }

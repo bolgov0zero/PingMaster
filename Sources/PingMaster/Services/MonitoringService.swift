@@ -20,6 +20,7 @@ class MonitoringService: ObservableObject {
         load()
         settingsCancellable = GlobalSettings.shared.$interval
             .dropFirst()
+            .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.restartAll() }
     }
 
