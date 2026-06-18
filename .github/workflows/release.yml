@@ -19,12 +19,32 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode.app
 
       - name: Build app
+        run: swift build -c release
+
+      - name: Create app bundle
         run: |
-          swift build -c release
-          mkdir -p build/PingMaster.app/Contents/MacOS
-          mkdir -p build/PingMaster.app/Contents/Resources
-          cp .build/release/PingMaster build/PingMaster.app/Contents/MacOS/PingMaster
-          cp Resources/Info.plist build/PingMaster.app/Contents/Info.plist
+          APP=build/PingMaster.app
+          mkdir -p "$APP/Contents/MacOS"
+          mkdir -p "$APP/Contents/Resources"
+
+          cp .build/release/PingMaster "$APP/Contents/MacOS/PingMaster"
+          cp Resources/Info.plist "$APP/Contents/Info.plist"
+          cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+          echo -n "APPL????" > "$APP/Contents/PkgInfo"
+
+      - name: Convert icon from jpg (CI safety check)
+        run: |
+          if [ ! -f Resources/AppIcon.icns ]; then
+            mkdir -p iconset.iconset
+            sips -s format png Resources/logo.jpg --out /tmp/logo_src.png 2>/dev/null || true
+            for size in 16 32 128 256 512; do
+              sips -z $size $size /tmp/logo_src.png --out "iconset.iconset/icon_${size}x${size}.png" 2>/dev/null || true
+              double=$((size * 2))
+              sips -z $double $double /tmp/logo_src.png --out "iconset.iconset/icon_${size}x${size}@2x.png" 2>/dev/null || true
+            done
+            iconutil -c icns iconset.iconset -o Resources/AppIcon.icns 2>/dev/null || true
+            rm -rf iconset.iconset
+          fi
 
       - name: Create DMG
         run: |
