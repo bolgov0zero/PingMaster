@@ -1,8 +1,8 @@
 import SwiftUI
-import Charts
 
 struct DashboardView: View {
     @ObservedObject var service = MonitoringService.shared
+    @ObservedObject var settings = GlobalSettings.shared
 
     var selectedHostID: Binding<UUID?> {
         Binding(
@@ -26,8 +26,7 @@ struct DashboardView: View {
 
     var recentResults: [LatencyPoint] {
         guard let id = service.selectedHostID else { return [] }
-        let all = service.latencyHistory[id] ?? []
-        return Array(all.suffix(20).reversed())
+        return Array((service.latencyHistory[id] ?? []).suffix(20).reversed())
     }
 
     var body: some View {
@@ -52,127 +51,66 @@ struct DashboardView: View {
 
             // Chart
             if service.hosts.isEmpty {
-                emptyState(icon: "server.rack", title: "Нет хостов", subtitle: "Добавьте хосты во вкладке «Хосты»")
+                emptyState(icon: "server.rack", title: "Нет хостов",
+                           subtitle: "Добавьте хосты во вкладке «Хосты»")
             } else if history.isEmpty {
-                emptyState(icon: "chart.line.uptrend.xyaxis", title: "Нет данных", subtitle: "Ожидание первого опроса...")
+                emptyState(icon: "chart.bar.xaxis", title: "Нет данных",
+                           subtitle: "Ожидание первого опроса...")
             } else {
-                let now = Date()
-                let xMin = now.addingTimeInterval(-60)
-                let xMax = now.addingTimeInterval(2)
-                let settings = GlobalSettings.shared
-
-                Chart {
-                    // Threshold zone fills
-                    RectangleMark(
-                        xStart: .value("", xMin), xEnd: .value("", xMax),
-                        yStart: .value("", 0),    yEnd: .value("", settings.greenThreshold)
-                    )
-                    .foregroundStyle(Color.green.opacity(0.05))
-
-                    RectangleMark(
-                        xStart: .value("", xMin), xEnd: .value("", xMax),
-                        yStart: .value("", settings.greenThreshold), yEnd: .value("", settings.orangeThreshold)
-                    )
-                    .foregroundStyle(Color.orange.opacity(0.05))
-
-                    RectangleMark(
-                        xStart: .value("", xMin), xEnd: .value("", xMax),
-                        yStart: .value("", settings.orangeThreshold), yEnd: .value("", settings.orangeThreshold * 3)
-                    )
-                    .foregroundStyle(Color.red.opacity(0.05))
-
-                    // Threshold lines
-                    RuleMark(y: .value("", settings.greenThreshold))
-                        .foregroundStyle(Color.green.opacity(0.4))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                    RuleMark(y: .value("", settings.orangeThreshold))
-                        .foregroundStyle(Color.orange.opacity(0.4))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-
-                    // Data line
-                    ForEach(history) { point in
-                        LineMark(
-                            x: .value("Время", point.timestamp),
-                            y: .value("мс", point.value)
-                        )
-                        .interpolationMethod(.catmullRom)
-                        .foregroundStyle(Color.primary.opacity(0.6))
-                    }
-
-                    // Colored points
-                    ForEach(history) { point in
-                        PointMark(
-                            x: .value("Время", point.timestamp),
-                            y: .value("мс", point.value)
-                        )
-                        .foregroundStyle(latencyColor(point.value))
-                        .symbolSize(20)
-                    }
-                }
-                .chartXScale(domain: xMin...xMax)
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 6)) { _ in
-                        AxisGridLine()
-                        AxisValueLabel(format: .dateTime.hour().minute().second())
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisGridLine()
-                        AxisValueLabel {
-                            Text("\(value.as(Double.self).map { Int($0) } ?? 0) мс")
-                        }
-                    }
-                }
-                .frame(height: 180)
+                SparklineChartView(
+                    points: history,
+                    greenThreshold: settings.greenThreshold,
+                    orangeThreshold: settings.orangeThreshold
+                )
+                .frame(height: 160)
             }
 
             // Stats row
             if let host = selectedHost {
-                HStack(spacing: 20) {
-                    Label(host.isAvailable ? "Доступен" : "Недоступен",
-                          systemImage: host.isAvailable ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .foregroundColor(host.isAvailable ? .green : .red)
+                HStack(spacing: 16) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(host.isAvailable ? Color.green : Color.red)
+                            .frame(width: 8, height: 8)
+                        Text(host.isAvailable ? "Доступен" : "Недоступен")
+                    }
 
                     if let ms = host.lastLatency {
-                        Text(String(format: "Последний: %.1f мс", ms)).foregroundColor(.secondary)
+                        statBadge("Последний", String(format: "%.1f мс", ms))
                     }
                     if !recentResults.isEmpty {
                         let avg = recentResults.map(\.value).reduce(0, +) / Double(recentResults.count)
-                        let min = recentResults.map(\.value).min() ?? 0
-                        let max = recentResults.map(\.value).max() ?? 0
-                        Text(String(format: "Среднее: %.1f мс", avg)).foregroundColor(.secondary)
-                        Text(String(format: "Min: %.1f / Max: %.1f мс", min, max)).foregroundColor(.secondary)
+                        let minV = recentResults.map(\.value).min() ?? 0
+                        let maxV = recentResults.map(\.value).max() ?? 0
+                        statBadge("Среднее", String(format: "%.1f мс", avg))
+                        statBadge("Мин", String(format: "%.1f мс", minV))
+                        statBadge("Макс", String(format: "%.1f мс", maxV))
                     }
+                    Spacer()
                 }
                 .font(.caption)
             }
 
             Divider()
 
-            // Last 20 results table
+            // Last 20 results
             if !recentResults.isEmpty {
                 Text("Последние результаты").font(.headline)
 
-                let columns: [GridItem] = [
-                    GridItem(.fixed(160), alignment: .leading),
-                    GridItem(.flexible(), alignment: .trailing)
-                ]
-
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 0) {
-                        // Header
-                        Text("Время").font(.caption).foregroundColor(.secondary).padding(.vertical, 4)
-                        Text("Задержка").font(.caption).foregroundColor(.secondary).padding(.vertical, 4)
-
-                        ForEach(recentResults) { point in
-                            Text(point.timestamp, format: .dateTime.hour().minute().second())
-                                .font(.caption.monospacedDigit())
-                                .padding(.vertical, 3)
-                            Text(String(format: "%.1f мс", point.value))
-                                .font(.caption.monospacedDigit())
-                                .foregroundColor(latencyColor(point.value))
-                                .padding(.vertical, 3)
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(recentResults.enumerated()), id: \.element.id) { idx, point in
+                            HStack {
+                                Text(point.timestamp, format: .dateTime.hour().minute().second())
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(String(format: "%.1f мс", point.value))
+                                    .foregroundColor(latencyColor(point.value))
+                            }
+                            .font(.caption.monospacedDigit())
+                            .padding(.vertical, 3)
+                            .padding(.horizontal, 4)
+                            .background(idx % 2 == 0 ? Color.primary.opacity(0.03) : Color.clear)
                         }
                     }
                 }
@@ -186,10 +124,17 @@ struct DashboardView: View {
     }
 
     private func latencyColor(_ ms: Double) -> Color {
-        let s = GlobalSettings.shared
-        if ms < s.greenThreshold  { return .green }
-        if ms < s.orangeThreshold { return .orange }
+        if ms < settings.greenThreshold  { return .green }
+        if ms < settings.orangeThreshold { return .orange }
         return .red
+    }
+
+    @ViewBuilder
+    private func statBadge(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 1) {
+            Text(label).foregroundColor(.secondary)
+            Text(value).monospacedDigit()
+        }
     }
 
     @ViewBuilder
@@ -201,6 +146,6 @@ struct DashboardView: View {
             Text(subtitle).foregroundColor(.secondary)
             Spacer()
         }
-        .frame(maxWidth: .infinity, minHeight: 180)
+        .frame(maxWidth: .infinity, minHeight: 160)
     }
 }
