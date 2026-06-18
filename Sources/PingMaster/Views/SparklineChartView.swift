@@ -17,8 +17,7 @@ struct SparklineChartView: View {
             let maxVal = max((points.map(\.value).max() ?? orangeThreshold) * 1.1, orangeThreshold)
             let n = points.count
             // Align bars to right edge, newest on right
-            let totalBarsWidth = CGFloat(n) * (barWidth + barGap) - barGap
-            let startX = max(0, w - totalBarsWidth)
+            let startX: CGFloat = 0
 
             Canvas { ctx, size in
                 // Center line
