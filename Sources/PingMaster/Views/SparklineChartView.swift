@@ -5,57 +5,38 @@ struct SparklineChartView: View {
     let greenThreshold: Double
     let orangeThreshold: Double
 
-    private let barGap: CGFloat = 2
-    private let cornerRadius: CGFloat = 2
+    private let barGap: CGFloat = 3
+    private let barWidth: CGFloat = 5
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
-            let chartH = h - 20  // bottom 20pt for time labels
-            let maxVal = max((points.map(\.value).max() ?? orangeThreshold) * 1.2, orangeThreshold * 1.1)
+            let cy = h / 2  // center line Y
+
+            let maxVal = max((points.map(\.value).max() ?? orangeThreshold) * 1.1, orangeThreshold)
             let n = points.count
-            let barW = n > 0 ? max(4, (w - CGFloat(n - 1) * barGap) / CGFloat(n)) : 8
+            // Align bars to right edge, newest on right
+            let totalBarsWidth = CGFloat(n) * (barWidth + barGap) - barGap
+            let startX = max(0, w - totalBarsWidth)
 
-            ZStack(alignment: .topLeading) {
-                // Bars
-                Canvas { ctx, _ in
-                    for (i, point) in points.enumerated() {
-                        let barH = CGFloat(point.value / maxVal) * chartH
-                        let x = CGFloat(i) * (barW + barGap)
-                        let y = chartH - barH
-                        let rect = CGRect(x: x, y: y, width: barW, height: barH)
-                        let path = Path(roundedRect: rect,
-                                        cornerRadii: RectangleCornerRadii(
-                                            topLeading: cornerRadius, bottomLeading: 0,
-                                            bottomTrailing: 0, topTrailing: cornerRadius))
-                        ctx.fill(path, with: .color(barColor(point.value).opacity(0.85)))
-                    }
-                }
-                .frame(width: w, height: chartH)
+            Canvas { ctx, size in
+                // Center line
+                var linePath = Path()
+                linePath.move(to: CGPoint(x: 0, y: cy))
+                linePath.addLine(to: CGPoint(x: w, y: cy))
+                ctx.stroke(linePath,
+                           with: .color(.primary.opacity(0.15)),
+                           style: StrokeStyle(lineWidth: 1))
 
-                // Time labels
-                if let first = points.first, let last = points.last {
-                    HStack {
-                        Text(first.timestamp, format: .dateTime.hour().minute().second())
-                        Spacer()
-                        Text(last.timestamp, format: .dateTime.hour().minute().second())
-                    }
-                    .font(.system(size: 10).monospacedDigit())
-                    .foregroundColor(.secondary)
-                    .frame(width: w)
-                    .offset(y: chartH + 4)
+                // Bars — symmetric around center
+                for (i, point) in points.enumerated() {
+                    let halfH = max(2, CGFloat(point.value / maxVal) * (h * 0.46))
+                    let x = startX + CGFloat(i) * (barWidth + barGap)
+                    let rect = CGRect(x: x, y: cy - halfH, width: barWidth, height: halfH * 2)
+                    let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
+                    ctx.fill(path, with: .color(barColor(point.value).opacity(0.85)))
                 }
-
-                // Y labels on right
-                VStack {
-                    Text("\(Int(maxVal)) мс").offset(x: w - 42, y: -2)
-                    Spacer()
-                    Text("0 мс").offset(x: w - 42, y: 0)
-                }
-                .font(.system(size: 9))
-                .foregroundColor(.secondary.opacity(0.6))
-                .frame(height: chartH)
             }
         }
     }
