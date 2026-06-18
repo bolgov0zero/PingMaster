@@ -1,7 +1,6 @@
 import Cocoa
 import SwiftUI
 
-@main
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var settingsWindow: NSWindow?
