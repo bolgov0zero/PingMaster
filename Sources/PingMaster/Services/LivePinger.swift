@@ -28,9 +28,11 @@ final class LivePinger: ObservableObject {
         received = 0
 
         let proc = Process()
-        // Under `script` for an unbuffered, line-by-line stream (pty).
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/script")
-        proc.arguments = ["-q", "/dev/null", "/sbin/ping", host]
+        // Direct /sbin/ping (no `script` wrapper): it works unprivileged in the
+        // release app and already flushes each reply line to the pipe. The
+        // wrapper relied on a pty that fails for a translocated/unsigned .app.
+        proc.executableURL = URL(fileURLWithPath: "/sbin/ping")
+        proc.arguments = ["-n", host]
 
         let pipe = Pipe()
         proc.standardOutput = pipe

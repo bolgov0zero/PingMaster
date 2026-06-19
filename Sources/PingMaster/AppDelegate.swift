@@ -193,13 +193,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showRightMenu() {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Настройки", action: #selector(openMain), keyEquivalent: ""))
+        let settings = NSMenuItem(title: "Настройки", action: #selector(openMain), keyEquivalent: "")
+        // Use a custom selector (not terminate:) so macOS doesn't auto-add icon.
+        let quit = NSMenuItem(title: "Выход", action: #selector(quitApp), keyEquivalent: "")
+        quit.target = self
+        menu.addItem(settings)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Выход", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
+        menu.addItem(quit)
 
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
         statusItem?.menu = nil
+    }
+
+    @objc func quitApp() {
+        NSApp.terminate(nil)
     }
 
     @objc func forcePing() {

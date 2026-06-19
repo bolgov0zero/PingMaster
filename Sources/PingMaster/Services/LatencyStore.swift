@@ -1,7 +1,7 @@
 import Foundation
 
 enum ChartPeriod: String, CaseIterable, Identifiable {
-    case online = "Онлайн"
+    case online = "Сейчас"
     case day = "День"
     case month = "Месяц"
     case year = "Год"
