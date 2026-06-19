@@ -46,6 +46,12 @@ jobs:
             rm -rf iconset.iconset
           fi
 
+      - name: Code sign (ad-hoc)
+        run: |
+          codesign --force --deep --identifier com.bolgov.PingMaster \
+            --sign - build/PingMaster.app
+          codesign -dv --verbose=2 build/PingMaster.app || true
+
       - name: Create DMG
         run: |
           mkdir -p dmg_tmp

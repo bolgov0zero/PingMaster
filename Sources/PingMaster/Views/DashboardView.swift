@@ -4,7 +4,13 @@ import AppKit
 struct DashboardView: View {
     @ObservedObject var service = MonitoringService.shared
     @ObservedObject var settings = GlobalSettings.shared
+    @ObservedObject var live = LivePinger.shared
     @State private var period: ChartPeriod = .online
+
+    // Continuous ping applies on the Онлайн view for ICMP hosts only.
+    private var useLivePing: Bool {
+        period == .online && selectedHost?.method == .ping
+    }
 
     var selectedHost: Host? {
         service.hosts.first { $0.id == service.selectedHostID }
@@ -40,12 +46,10 @@ struct DashboardView: View {
                         }
                         .frame(height: 190)
 
-                        statsCards
-
                         // Flexible chart and bottom row share the remaining
                         // height; each keeps a guaranteed minimum.
                         chartCard
-                            .frame(minHeight: 140, maxHeight: .infinity)
+                            .frame(minHeight: 150, maxHeight: .infinity)
 
                         HStack(alignment: .top, spacing: 12) {
                             card(fill: true) {
@@ -54,10 +58,10 @@ struct DashboardView: View {
                                                orangeThreshold: settings.orangeThreshold)
                                     .id(host.id)  // reset runner on host switch
                             }
-                            recentCard
-                                .frame(width: 240)
+                            statsCard(host)
+                                .frame(width: 320)
                         }
-                        .frame(minHeight: 200, maxHeight: .infinity)
+                        .frame(minHeight: 210, maxHeight: .infinity)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -68,6 +72,18 @@ struct DashboardView: View {
             if service.selectedHostID == nil {
                 service.selectedHostID = service.hosts.first?.id
             }
+            syncLive()
+        }
+        .onDisappear { live.stop() }
+        .onChange(of: period) { _ in syncLive() }
+        .onChange(of: service.selectedHostID) { _ in syncLive() }
+    }
+
+    private func syncLive() {
+        if useLivePing, let host = selectedHost {
+            live.start(address: host.address)
+        } else {
+            live.stop()
         }
     }
 
@@ -181,26 +197,106 @@ struct DashboardView: View {
         .background(Capsule().fill(Color.primary.opacity(0.06)))
     }
 
-    // MARK: - Stats cards
+    // MARK: - Stats card
 
-    private var statsCards: some View {
-        let window = Array(history.suffix(60).map(\.value))
-        return HStack(spacing: 10) {
-            statCard("Среднее", window.isEmpty ? "–" : String(format: "%.0f", window.reduce(0,+) / Double(window.count)))
-            statCard("Мин", window.min().map { String(format: "%.0f", $0) } ?? "–")
-            statCard("Макс", window.max().map { String(format: "%.0f", $0) } ?? "–")
-            statCard("Джиттер", jitter(window).map { String(format: "%.0f", $0) } ?? "–")
+    @ViewBuilder
+    private func statsCard(_ host: Host) -> some View {
+        // When the live ping drives the Онлайн view, stats come from it.
+        let source = useLivePing ? live.points : history
+        let window = Array(source.suffix(60).map(\.value))
+        let d: (sent: Int, received: Int) = useLivePing
+            ? (live.sent, live.received)
+            : service.delivery(for: host, count: 60)
+        let loss = d.sent > 0 ? Double(d.sent - d.received) / Double(d.sent) * 100 : 0
+        let avg = window.isEmpty ? nil : window.reduce(0, +) / Double(window.count)
+        let grade = self.grade(avg: avg, loss: loss)
+        let lastPings = Array(source.suffix(10))  // oldest → newest
+
+        card(fill: true) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Статистика").font(.headline)
+                    Spacer()
+                    Text(grade.letter)
+                        .font(.headline.bold())
+                        .foregroundColor(.white)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(grade.color))
+                }
+
+                let cols = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+                LazyVGrid(columns: cols, spacing: 8) {
+                    statTile("paperplane.fill", "Отпр.", "\(d.sent)", .secondary)
+                    statTile("checkmark.circle.fill", "Получ.", "\(d.received)", .green)
+                    statTile("exclamationmark.triangle.fill", "Потери",
+                             String(format: "%.0f%%", loss), loss > 0 ? .orange : .secondary)
+                    statTile("arrow.down.to.line", "Мин",
+                             window.min().map { String(format: "%.0f", $0) } ?? "–", .green)
+                    statTile("arrow.up.to.line", "Макс",
+                             window.max().map { String(format: "%.0f", $0) } ?? "–", .red)
+                    statTile("equal.circle.fill", "Сред.",
+                             avg.map { String(format: "%.0f", $0) } ?? "–", .blue)
+                }
+
+                if !lastPings.isEmpty {
+                    Text("Последние пинги").font(.caption2).foregroundColor(.secondary)
+                    let start = source.count - lastPings.count
+                    let pillCols = [GridItem(.adaptive(minimum: 44), spacing: 5)]
+                    LazyVGrid(columns: pillCols, alignment: .leading, spacing: 5) {
+                        // Newest first (left); older readings shift to the right.
+                        ForEach(Array(lastPings.enumerated()).reversed(), id: \.element.id) { j, p in
+                            // Compare to the reading just before it in the full series.
+                            let gi = start + j
+                            pingPill(p.value, prev: gi > 0 ? source[gi - 1].value : nil)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
         }
     }
 
-    private func statCard(_ label: String, _ value: String) -> some View {
-        VStack(spacing: 3) {
-            Text(value).font(.title3.bold()).monospacedDigit()
-            Text(label).font(.caption2).foregroundColor(.secondary)
+    @ViewBuilder
+    private func pingPill(_ value: Double, prev: Double?) -> some View {
+        // Arrow vs the previous reading: up = latency rose (worse), down = fell.
+        let trend: (sym: String, color: Color)? = {
+            guard let prev else { return nil }
+            if value > prev { return ("arrow.up", .red) }
+            if value < prev { return ("arrow.down", .green) }
+            return ("minus", .secondary)
+        }()
+        HStack(spacing: 2) {
+            Text(String(format: "%.0f", value))
+                .font(.caption2.monospacedDigit())
+                .foregroundColor(latencyColor(value))
+            if let trend {
+                Image(systemName: trend.sym).font(.system(size: 7, weight: .bold))
+                    .foregroundColor(trend.color)
+            }
+        }
+        .padding(.horizontal, 6).padding(.vertical, 3)
+        .background(Capsule().fill(latencyColor(value).opacity(0.15)))
+    }
+
+    private func statTile(_ icon: String, _ label: String, _ value: String, _ tint: Color) -> some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 9)).foregroundColor(tint)
+                Text(label).font(.system(size: 9)).foregroundColor(.secondary)
+            }
+            Text(value).font(.callout.bold().monospacedDigit())
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+    }
+
+    private func grade(avg: Double?, loss: Double) -> (letter: String, color: Color) {
+        if loss >= 10 { return ("D", .red) }
+        guard let avg else { return ("–", .secondary) }
+        if loss >= 2 || avg >= settings.orangeThreshold { return ("C", .red) }
+        if avg >= settings.greenThreshold { return ("B", .orange) }
+        return ("A", .green)
     }
 
     // MARK: - Chart card
@@ -219,8 +315,11 @@ struct DashboardView: View {
     private var chartCard: some View {
         card(fill: true) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Задержка").font(.headline)
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("График задержки").font(.title3).bold()
+                        Text("История пинга").font(.caption2).foregroundColor(.secondary)
+                    }
                     Spacer()
                     Picker("", selection: $period) {
                         ForEach(ChartPeriod.allCases) { p in Text(p.rawValue).tag(p) }
@@ -234,30 +333,25 @@ struct DashboardView: View {
         }
     }
 
+    private var chartSlots: [LatencyPoint?] {
+        if period == .online {
+            let pts = useLivePing ? live.points : onlineSeries
+            return pts.suffix(80).map { Optional($0) }
+        }
+        return slottedSeries
+    }
+
     @ViewBuilder
     private var chartBody: some View {
-        if period == .online {
-            if onlineSeries.isEmpty {
-                chartEmpty
-            } else {
-                SparklineChartView(points: onlineSeries,
-                                   greenThreshold: settings.greenThreshold,
-                                   orangeThreshold: settings.orangeThreshold,
-                                   dateStyle: tooltipStyle)
-                    .frame(maxHeight: .infinity)
-            }
+        let slots = chartSlots
+        if slots.allSatisfy({ $0 == nil }) {
+            chartEmpty
         } else {
-            let slots = slottedSeries
-            if slots.allSatisfy({ $0 == nil }) {
-                chartEmpty
-            } else {
-                SparklineChartView(points: [],
-                                   greenThreshold: settings.greenThreshold,
-                                   orangeThreshold: settings.orangeThreshold,
-                                   dateStyle: tooltipStyle,
-                                   slots: slots)
-                    .frame(maxHeight: .infinity)
-            }
+            LineChartView(slots: slots,
+                          greenThreshold: settings.greenThreshold,
+                          orangeThreshold: settings.orangeThreshold,
+                          dateStyle: tooltipStyle)
+                .frame(maxHeight: .infinity)
         }
     }
 
@@ -272,36 +366,6 @@ struct DashboardView: View {
         case .day:    return .dateTime.hour().minute()
         case .month:  return .dateTime.day().month()
         case .year:   return .dateTime.month().year()
-        }
-    }
-
-    // MARK: - Recent results card
-
-    private var recentCard: some View {
-        card(fill: true) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Последние результаты").font(.headline)
-                if recentResults.isEmpty {
-                    Text("Нет данных").font(.caption).foregroundColor(.secondary)
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(recentResults.enumerated()), id: \.element.id) { idx, point in
-                                HStack {
-                                    Text(point.timestamp, format: .dateTime.hour().minute().second())
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    Text(String(format: "%.1f мс", point.value))
-                                        .foregroundColor(latencyColor(point.value))
-                                }
-                                .font(.caption.monospacedDigit())
-                                .padding(.vertical, 3).padding(.horizontal, 4)
-                                .background(idx % 2 == 0 ? Color.primary.opacity(0.03) : Color.clear)
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 

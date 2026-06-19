@@ -256,6 +256,12 @@ class MonitoringService: ObservableObject {
         }
     }
 
+    /// Sent/received counts over the last `count` polls (from the 24h log).
+    func delivery(for host: Host, count: Int) -> (sent: Int, received: Int) {
+        let recent = (availabilityLog[host.id] ?? []).suffix(count)
+        return (recent.count, recent.filter { $0.up }.count)
+    }
+
     /// Uptime % over the last 24h (or since launch if the app ran < 24h).
     /// Returns nil when there are no samples yet.
     func uptimePercent(for host: Host) -> Double? {

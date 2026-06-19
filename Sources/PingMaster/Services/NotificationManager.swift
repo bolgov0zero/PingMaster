@@ -1,51 +1,42 @@
 import Foundation
-import UserNotifications
+import AppKit
 
+// Uses the legacy NSUserNotification API: unlike UNUserNotificationCenter it
+// works for ad-hoc / unsigned apps (no Developer ID), which is how this app is
+// distributed. Still requires running inside a proper .app bundle.
 class NotificationManager {
     static let shared = NotificationManager()
-    private var authorized = false
 
     private init() {}
 
-    // UNUserNotificationCenter asserts when the process has no app bundle
-    // (e.g. running the bare executable from Xcode DerivedData). Only use it
-    // when launched as a proper .app with a bundle identifier.
     private var isBundled: Bool { Bundle.main.bundleIdentifier != nil }
 
     func requestAuthorization() {
-        guard isBundled else { return }
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] granted, _ in
-            self?.authorized = granted
-        }
+        // No explicit authorization needed for NSUserNotification.
     }
 
     func notifyDown(host: Host) {
         send(title: "Хост недоступен",
-             body: "«\(host.name)» (\(host.address)) не отвечает",
-             id: "down-\(host.id.uuidString)")
+             body: "«\(host.name)» (\(host.address)) не отвечает")
     }
 
     func notifyUp(host: Host) {
         send(title: "Хост восстановлен",
-             body: "«\(host.name)» (\(host.address)) снова доступен",
-             id: "up-\(host.id.uuidString)")
+             body: "«\(host.name)» (\(host.address)) снова доступен")
     }
 
     func notifySSL(host: Host, days: Int) {
         let when = days == 0 ? "сегодня" : "через \(days) дн."
         send(title: "SSL-сертификат истекает",
-             body: "«\(host.name)»: сертификат истекает \(when)",
-             id: "ssl-\(host.id.uuidString)")
+             body: "«\(host.name)»: сертификат истекает \(when)")
     }
 
-    private func send(title: String, body: String, id: String) {
+    private func send(title: String, body: String) {
         guard isBundled, GlobalSettings.shared.notificationsEnabled else { return }
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        let request = UNNotificationRequest(identifier: id + "-\(Date().timeIntervalSince1970)",
-                                            content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        let n = NSUserNotification()
+        n.title = title
+        n.informativeText = body
+        n.soundName = NSUserNotificationDefaultSoundName
+        NSUserNotificationCenter.default.deliver(n)
     }
 }

@@ -6,15 +6,23 @@ struct HeatmapView: View {
 
     private let gap: CGFloat = 2
 
+    @State private var hoverText: String? = nil
+
     var body: some View {
         let grid = UptimeStore.shared.grid(hostID: hostID, days: days)
         let dayLabels = makeDayLabels()
 
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("Доступность по часам").font(.headline)
                 Spacer()
-                legend
+                if let hoverText {
+                    Text(hoverText)
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.primary)
+                } else {
+                    legend
+                }
             }
 
             VStack(spacing: gap) {
@@ -35,16 +43,21 @@ struct HeatmapView: View {
                             .font(.system(size: 9))
                             .foregroundColor(.secondary)
                             .frame(width: 34, alignment: .trailing)
-                        ForEach(Array(cells.enumerated()), id: \.offset) { _, value in
+                        ForEach(Array(cells.enumerated()), id: \.offset) { hour, value in
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(color(for: value))
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .contentShape(Rectangle())
+                                .onHover { inside in
+                                    if inside { hoverText = tooltip(day: dayLabels[row], hour: hour, value: value) }
+                                }
                         }
                     }
                     .frame(maxHeight: .infinity)
                 }
             }
             .frame(maxHeight: .infinity)
+            .onHover { if !$0 { hoverText = nil } }  // clear when leaving the grid
         }
         .frame(maxHeight: .infinity)
     }
@@ -72,12 +85,19 @@ struct HeatmapView: View {
         }
     }
 
+    private func tooltip(day: String, hour: Int, value: Double?) -> String {
+        let time = String(format: "%@ %02d:00", day, hour)
+        if let v = value {
+            return "\(time) — \(Int((v * 100).rounded()))%"
+        }
+        return "\(time) — нет данных"
+    }
+
     private func makeDayLabels() -> [String] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "ru_RU")
-        fmt.dateFormat = "d MMM"
+        fmt.dateFormat = "dd.MM"
         return (0..<days).reversed().map { offset in
             guard let d = cal.date(byAdding: .day, value: -offset, to: today) else { return "" }
             return fmt.string(from: d)

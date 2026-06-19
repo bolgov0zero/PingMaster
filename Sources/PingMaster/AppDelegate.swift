@@ -224,9 +224,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             mainWindow?.contentMinSize = NSSize(width: 700, height: 760)
             mainWindow?.center()
             mainWindow?.isReleasedWhenClosed = false
+            mainWindow?.delegate = self
         }
         mainWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        // Stop the dashboard's continuous ping when the window is closed.
+        LivePinger.shared.stop()
     }
 }
 
