@@ -99,9 +99,9 @@ struct DetailCardView: View {
                             .font(.caption).foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        SparklineChartView(points: history,
-                                           greenThreshold: settings.greenThreshold,
-                                           orangeThreshold: settings.orangeThreshold)
+                        LineChartView(slots: history.suffix(80).map { Optional($0) },
+                                      greenThreshold: settings.greenThreshold,
+                                      orangeThreshold: settings.orangeThreshold)
                     }
                 }
                 .padding(14)

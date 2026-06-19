@@ -32,6 +32,17 @@ struct LineChartView: View {
                         y: plot.maxY - CGFloat(v / niceMax) * plot.height)
             }
 
+            // Vertical gradient keyed to the thresholds: green near the bottom
+            // (low latency), orange at orangeThreshold, red at the top.
+            let gradTop = CGPoint(x: plot.minX, y: plot.minY)
+            let gradBot = CGPoint(x: plot.minX, y: plot.maxY)
+            let lineShading = GraphicsContext.Shading.linearGradient(
+                thresholdGradient(niceMax: niceMax, opacity: 1.0),
+                startPoint: gradTop, endPoint: gradBot)
+            let areaShading = GraphicsContext.Shading.linearGradient(
+                thresholdGradient(niceMax: niceMax, opacity: 0.28),
+                startPoint: gradTop, endPoint: gradBot)
+
             ZStack(alignment: .topLeading) {
                 Canvas { ctx, _ in
                     // Y grid + labels
@@ -68,18 +79,15 @@ struct LineChartView: View {
                         area.addLine(to: CGPoint(x: seg.last!.x, y: plot.maxY))
                         area.addLine(to: CGPoint(x: seg.first!.x, y: plot.maxY))
                         area.closeSubpath()
-                        ctx.fill(area, with: .linearGradient(
-                            Gradient(colors: [Color.accentColor.opacity(0.35), Color.accentColor.opacity(0.02)]),
-                            startPoint: CGPoint(x: 0, y: plot.minY),
-                            endPoint: CGPoint(x: 0, y: plot.maxY)))
+                        ctx.fill(area, with: areaShading)
 
                         // Line
                         if seg.count > 1 {
-                            ctx.stroke(linePath, with: .color(.accentColor),
+                            ctx.stroke(linePath, with: lineShading,
                                        style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                         } else {
                             ctx.fill(Path(ellipseIn: CGRect(x: seg[0].x - 2, y: seg[0].y - 2, width: 4, height: 4)),
-                                     with: .color(.accentColor))
+                                     with: lineShading)
                         }
                     }
 
@@ -87,7 +95,7 @@ struct LineChartView: View {
                     if let lastIdx = slots.lastIndex(where: { $0 != nil }), let v = slots[lastIdx]?.value {
                         let p = pt(lastIdx, v)
                         ctx.fill(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)),
-                                 with: .color(.accentColor))
+                                 with: .color(barColor(v)))
                         ctx.stroke(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)),
                                    with: .color(Color(nsColor: .windowBackgroundColor)), lineWidth: 1.5)
                     }
@@ -100,7 +108,7 @@ struct LineChartView: View {
                         .font(.caption.monospacedDigit().weight(.semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Capsule().fill(Color.accentColor))
+                        .background(Capsule().fill(barColor(v)))
                         .fixedSize()
                         .position(x: min(p.x, plot.maxX - 28), y: max(p.y - 14, topPad + 6))
                 }
@@ -131,6 +139,19 @@ struct LineChartView: View {
                 }
             }
         }
+    }
+
+    // Vertical gradient (top = high latency = red → bottom = low = green) with
+    // stops aligned to the thresholds, so the line/area smoothly shifts color.
+    private func thresholdGradient(niceMax: Double, opacity: Double) -> Gradient {
+        let locOrange = max(0, min(1, 1 - orangeThreshold / niceMax))
+        let locGreen = max(locOrange, min(1, 1 - greenThreshold / niceMax))
+        return Gradient(stops: [
+            .init(color: .red.opacity(opacity), location: 0),
+            .init(color: .orange.opacity(opacity), location: locOrange),
+            .init(color: .green.opacity(opacity), location: locGreen),
+            .init(color: .green.opacity(opacity), location: 1)
+        ])
     }
 
     private func barColor(_ ms: Double) -> Color {
