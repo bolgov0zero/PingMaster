@@ -13,6 +13,16 @@ class MonitoringService: ObservableObject {
     @Published var latencyHistory: [UUID: [LatencyPoint]] = [:]
     @Published var selectedHostID: UUID? = nil
 
+    // Host sections (groups). Hosts with sectionID == nil are «Без раздела».
+    @Published var sections: [HostSection] = []
+    private let sectionsKey = "PingMasterSections"
+
+    // Collapse state is tracked separately for the menu panel and the Hosts tab.
+    @Published var collapsedMenu: Set<UUID> = []
+    @Published var collapsedTab: Set<UUID> = []
+    @Published var uncatMenuCollapsed = false
+    @Published var uncatTabCollapsed = false
+
     // Availability samples per host (timestamp, up?), pruned to the last 24h.
     private var availabilityLog: [UUID: [(date: Date, up: Bool)]] = [:]
     let launchDate = Date()
@@ -292,6 +302,115 @@ class MonitoringService: ObservableObject {
         return .green
     }
 
+    /// Aggregate status for a section: red if any host red/down, else yellow if
+    /// any yellow, else green if all green, gray if empty.
+    func sectionStatus(_ sectionID: UUID?) -> HostStatus? {
+        let group = hosts(in: sectionID)
+        guard !group.isEmpty else { return nil }
+        let statuses = group.map { status(for: $0) }
+        if statuses.contains(.red) { return .red }
+        if statuses.contains(.yellow) { return .yellow }
+        return .green
+    }
+
+    // MARK: - Sections
+
+    func hosts(in sectionID: UUID?) -> [Host] {
+        hosts.filter { $0.sectionID == sectionID }
+    }
+
+    func addSection(name: String) {
+        sections.append(HostSection(name: name))
+        saveSections()
+    }
+
+    func moveSection(_ id: UUID, before targetID: UUID) {
+        guard id != targetID, let from = sections.firstIndex(where: { $0.id == id }) else { return }
+        let moving = sections.remove(at: from)
+        let to = sections.firstIndex(where: { $0.id == targetID }) ?? sections.count
+        sections.insert(moving, at: to)
+        saveSections()
+        objectWillChange.send()
+    }
+
+    func renameSection(_ id: UUID, to name: String) {
+        guard let i = sections.firstIndex(where: { $0.id == id }) else { return }
+        sections[i].name = name
+        saveSections()
+    }
+
+    func removeSection(_ id: UUID) {
+        // Move its hosts back to «Без раздела».
+        hosts.forEach { if $0.sectionID == id { $0.sectionID = nil } }
+        sections.removeAll { $0.id == id }
+        collapsedMenu.remove(id)
+        collapsedTab.remove(id)
+        saveSections()
+        saveCollapse()
+        save()
+    }
+
+    enum CollapseScope { case menu, tab }
+
+    func isCollapsed(_ sectionID: UUID?, _ scope: CollapseScope) -> Bool {
+        if let id = sectionID {
+            return scope == .menu ? collapsedMenu.contains(id) : collapsedTab.contains(id)
+        }
+        return scope == .menu ? uncatMenuCollapsed : uncatTabCollapsed
+    }
+
+    func toggleCollapse(_ sectionID: UUID?, _ scope: CollapseScope) {
+        if let id = sectionID {
+            if scope == .menu { collapsedMenu.formSymmetricDifference([id]) }
+            else { collapsedTab.formSymmetricDifference([id]) }
+        } else {
+            if scope == .menu { uncatMenuCollapsed.toggle() } else { uncatTabCollapsed.toggle() }
+        }
+        saveCollapse()
+    }
+
+    private func saveCollapse() {
+        let d = UserDefaults.standard
+        d.set(collapsedMenu.map(\.uuidString), forKey: "collapsedMenu")
+        d.set(collapsedTab.map(\.uuidString), forKey: "collapsedTab")
+        d.set(uncatMenuCollapsed, forKey: "uncatMenuCollapsed")
+        d.set(uncatTabCollapsed, forKey: "uncatTabCollapsed")
+    }
+
+    private func loadCollapse() {
+        let d = UserDefaults.standard
+        collapsedMenu = Set((d.array(forKey: "collapsedMenu") as? [String] ?? []).compactMap { UUID(uuidString: $0) })
+        collapsedTab = Set((d.array(forKey: "collapsedTab") as? [String] ?? []).compactMap { UUID(uuidString: $0) })
+        uncatMenuCollapsed = d.bool(forKey: "uncatMenuCollapsed")
+        uncatTabCollapsed = d.bool(forKey: "uncatTabCollapsed")
+    }
+
+    /// Moves `host` so it sits right before `target` (and into target's section).
+    func moveHost(_ host: Host, before target: Host) {
+        guard host.id != target.id, let from = hosts.firstIndex(where: { $0.id == host.id }) else { return }
+        hosts.remove(at: from)
+        host.sectionID = target.sectionID
+        let to = hosts.firstIndex(where: { $0.id == target.id }) ?? hosts.count
+        hosts.insert(host, at: to)
+        save()
+        objectWillChange.send()
+    }
+
+    /// Moves `host` to the end of the given section.
+    func moveHost(_ host: Host, toSection sectionID: UUID?) {
+        guard let from = hosts.firstIndex(where: { $0.id == host.id }) else { return }
+        hosts.remove(at: from)
+        host.sectionID = sectionID
+        // Insert after the last host already in that section, else append.
+        if let lastIdx = hosts.lastIndex(where: { $0.sectionID == sectionID }) {
+            hosts.insert(host, at: lastIdx + 1)
+        } else {
+            hosts.append(host)
+        }
+        save()
+        objectWillChange.send()
+    }
+
     // MARK: - Persistence
 
     func save() {
@@ -300,10 +419,24 @@ class MonitoringService: ObservableObject {
         }
     }
 
+    private func saveSections() {
+        if let data = try? JSONEncoder().encode(sections) {
+            UserDefaults.standard.set(data, forKey: sectionsKey)
+        }
+    }
+
     private func load() {
+        loadCollapse()
+        if let sdata = UserDefaults.standard.data(forKey: sectionsKey),
+           let loadedSections = try? JSONDecoder().decode([HostSection].self, from: sdata) {
+            sections = loadedSections
+        }
         guard let data = UserDefaults.standard.data(forKey: saveKey),
               let loaded = try? JSONDecoder().decode([Host].self, from: data) else { return }
         hosts = loaded
         hosts.forEach { latencyHistory[$0.id] = [] }
+        // Drop section references that no longer exist.
+        let ids = Set(sections.map(\.id))
+        hosts.forEach { if let sid = $0.sectionID, !ids.contains(sid) { $0.sectionID = nil } }
     }
 }

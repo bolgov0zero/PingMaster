@@ -19,6 +19,7 @@ class Host: ObservableObject, Identifiable, Codable {
     @Published var method: PollMethod
     @Published var failThreshold: Int
     @Published var showInMenu: Bool
+    @Published var sectionID: UUID?  // nil = «Без раздела»
 
     @Published var isAvailable: Bool = true
     @Published var lastLatency: Double? = nil
@@ -31,17 +32,19 @@ class Host: ObservableObject, Identifiable, Codable {
     }
 
     init(id: UUID = UUID(), name: String, address: String,
-         method: PollMethod = .ping, failThreshold: Int = 3, showInMenu: Bool = true) {
+         method: PollMethod = .ping, failThreshold: Int = 3, showInMenu: Bool = true,
+         sectionID: UUID? = nil) {
         self.id = id
         self.name = name
         self.address = address
         self.method = method
         self.failThreshold = failThreshold
         self.showInMenu = showInMenu
+        self.sectionID = sectionID
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, address, method, failThreshold, showInMenu
+        case id, name, address, method, failThreshold, showInMenu, sectionID
     }
 
     required init(from decoder: Decoder) throws {
@@ -52,6 +55,7 @@ class Host: ObservableObject, Identifiable, Codable {
         method = try c.decode(PollMethod.self, forKey: .method)
         failThreshold = try c.decodeIfPresent(Int.self, forKey: .failThreshold) ?? 3
         showInMenu = try c.decodeIfPresent(Bool.self, forKey: .showInMenu) ?? true
+        sectionID = try c.decodeIfPresent(UUID.self, forKey: .sectionID)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -62,5 +66,18 @@ class Host: ObservableObject, Identifiable, Codable {
         try c.encode(method, forKey: .method)
         try c.encode(failThreshold, forKey: .failThreshold)
         try c.encode(showInMenu, forKey: .showInMenu)
+        try c.encodeIfPresent(sectionID, forKey: .sectionID)
     }
+}
+
+struct HostSection: Identifiable, Codable, Equatable {
+    let id: UUID
+    var name: String
+
+    init(id: UUID = UUID(), name: String) {
+        self.id = id
+        self.name = name
+    }
+
+    enum CodingKeys: String, CodingKey { case id, name }  // ignore legacy `collapsed`
 }

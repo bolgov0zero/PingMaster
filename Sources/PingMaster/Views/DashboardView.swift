@@ -89,10 +89,15 @@ struct DashboardView: View {
 
     // MARK: - Host selector chips
 
+    // Ordered by section (section1's hosts, section2's hosts, …) then «Без раздела».
+    private var chipHosts: [Host] {
+        service.sections.flatMap { service.hosts(in: $0.id) } + service.hosts(in: nil)
+    }
+
     private var hostChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(service.hosts) { host in
+                ForEach(chipHosts) { host in
                     let selected = host.id == service.selectedHostID
                     Button {
                         service.selectedHostID = host.id

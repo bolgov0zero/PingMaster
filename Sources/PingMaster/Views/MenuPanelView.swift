@@ -13,7 +13,11 @@ struct MenuPanelView: View {
     @ObservedObject var settings = GlobalSettings.shared
     @ObservedObject var hover = PanelHoverState.shared
 
+    var onResize: ((CGSize) -> Void)? = nil
+    var onSelectHost: ((Host) -> Void)? = nil
+
     private var hosts: [Host] { service.hosts.filter { $0.showInMenu } }
+    private func menuHosts(in id: UUID?) -> [Host] { hosts.filter { $0.sectionID == id } }
 
     var body: some View {
         Group {
@@ -21,8 +25,13 @@ struct MenuPanelView: View {
                 emptyState
             } else {
                 VStack(spacing: 1) {
-                    ForEach(hosts) { host in
-                        hostRow(host)
+                    if service.sections.isEmpty {
+                        ForEach(hosts) { hostRow($0) }
+                    } else {
+                        ForEach(service.sections) { section in
+                            sectionBlock(id: section.id, name: section.name)
+                        }
+                        sectionBlock(id: nil, name: "Без раздела")
                     }
                 }
                 .padding(5)
@@ -31,6 +40,39 @@ struct MenuPanelView: View {
         .fixedSize()
         .background(MenuVisualEffect())
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(GeometryReader { geo in
+            Color.clear
+                .onAppear { onResize?(geo.size) }
+                .onChange(of: geo.size) { onResize?($0) }
+        })
+    }
+
+    @ViewBuilder
+    private func sectionBlock(id: UUID?, name: String) -> some View {
+        let group = menuHosts(in: id)
+        if !group.isEmpty {
+            sectionHeader(id: id, name: name, count: group.count)
+            if !service.isCollapsed(id, .menu) {
+                ForEach(group) { hostRow($0) }
+            }
+        }
+    }
+
+    private func sectionHeader(id: UUID?, name: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: service.isCollapsed(id, .menu) ? "chevron.right" : "chevron.down")
+                .font(.system(size: 8, weight: .bold)).foregroundColor(.secondary).frame(width: 9)
+            Circle().fill((service.sectionStatus(id)?.color) ?? Color.secondary.opacity(0.4))
+                .frame(width: 7, height: 7)
+            Text(name).font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary).fixedSize()
+            Spacer(minLength: 8)
+            Text("\(count)").font(.system(size: 10)).foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 7).padding(.vertical, 4)
+        .contentShape(Rectangle())
+        // Toggle instantly in SwiftUI; the panel window animates its own resize,
+        // so the header stays put and rows are revealed/hidden smoothly.
+        .onTapGesture { service.toggleCollapse(id, .menu) }
     }
 
     private func hostRow(_ host: Host) -> some View {
@@ -60,6 +102,7 @@ struct MenuPanelView: View {
         .background(RoundedRectangle(cornerRadius: 5).fill(active ? Color.accentColor : Color.clear))
         .contentShape(Rectangle())
         .onHover { if $0 { hover.hostID = host.id } }
+        .onTapGesture { onSelectHost?(host) }
     }
 
     private var emptyState: some View {
@@ -102,18 +145,39 @@ struct DetailCardView: View {
                         LineChartView(slots: history.suffix(80).map { Optional($0) },
                                       greenThreshold: settings.greenThreshold,
                                       orangeThreshold: settings.orangeThreshold)
+                            .frame(maxHeight: .infinity)
+                    }
+
+                    if host.method == .https {
+                        sslRow(host)
                     }
                 }
                 .padding(14)
-                .frame(width: 360, height: 184)
+                .frame(width: 360, height: 210)
                 .background(MenuVisualEffect())
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.08), lineWidth: 1))
             } else {
                 // Invisible until a host is hovered.
-                Color.clear.frame(width: 360, height: 184)
+                Color.clear.frame(width: 360, height: 210)
             }
         }
+    }
+
+    @ViewBuilder
+    private func sslRow(_ host: Host) -> some View {
+        let warn = (host.sslDaysLeft ?? 99) <= 14
+        HStack(spacing: 6) {
+            Image(systemName: warn ? "exclamationmark.shield" : "lock.shield")
+            if let days = host.sslDaysLeft, let exp = host.sslExpiry {
+                Text("Сертификат: \(days) дн. · до ") + Text(exp, format: .dateTime.day().month().year())
+            } else {
+                Text("Сертификат: проверка…")
+            }
+            Spacer()
+        }
+        .font(.caption2)
+        .foregroundColor(warn ? .orange : .secondary)
     }
 }
 

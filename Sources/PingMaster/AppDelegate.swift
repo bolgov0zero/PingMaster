@@ -113,9 +113,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // monitor when the status button itself was clicked.
         if Date().timeIntervalSince(panelClosedAt) < 0.25 { return }
 
-        let root = MenuPanelView()
+        let root = MenuPanelView(
+            onResize: { [weak self] newSize in self?.resizeHostPanel(to: newSize) },
+            onSelectHost: { [weak self] host in
+                self?.monitoringService.selectedHostID = host.id
+                AppRouter.shared.tab = 0  // Главная
+                self?.openMain()
+                self?.closePanel()
+            }
+        )
 
         let hosting = NSHostingView(rootView: root)
+        hosting.autoresizingMask = [.width, .height]
         hosting.layoutSubtreeIfNeeded()
         let size = hosting.fittingSize
         hosting.frame = NSRect(origin: .zero, size: size)
@@ -175,6 +184,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panelMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             self?.closePanel()
         }
+    }
+
+    // Resize the panel when sections collapse/expand, keeping the top edge fixed
+    // so the header stays put and the content collapses into it.
+    private func resizeHostPanel(to newSize: CGSize) {
+        guard let panel = hostPanel, newSize.width > 1, newSize.height > 1 else { return }
+        let f = panel.frame
+        guard abs(f.height - newSize.height) > 0.5 || abs(f.width - newSize.width) > 0.5 else { return }
+        let top = f.maxY
+        panel.setFrame(NSRect(x: f.origin.x, y: top - newSize.height,
+                              width: newSize.width, height: newSize.height), display: true)
     }
 
     private func closePanel() {
