@@ -207,8 +207,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openTerminalCommand(_ command: String) {
-        let script = "tell application \"Terminal\" to do script \"\(command)\"\ntell application \"Terminal\" to activate"
-        NSAppleScript(source: script)?.executeAndReturnError(nil)
+        openInTerminal(command)
     }
 
     private func showRightMenu() {
@@ -232,11 +231,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func forcePing() {
         monitoringService.pingAll()
-    }
-
-    func openTerminalForAddress(_ address: String) {
-        let script = "tell application \"Terminal\" to do script \"ping \(address)\"\ntell application \"Terminal\" to activate"
-        NSAppleScript(source: script)?.executeAndReturnError(nil)
     }
 
     @objc func openMain() {

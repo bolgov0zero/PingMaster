@@ -393,8 +393,7 @@ struct DashboardView: View {
     }
 
     private func openTerminal(_ command: String) {
-        let script = "tell application \"Terminal\" to do script \"\(command)\"\ntell application \"Terminal\" to activate"
-        NSAppleScript(source: script)?.executeAndReturnError(nil)
+        openInTerminal(command)
     }
 
     private func latencyColor(_ ms: Double) -> Color {

@@ -1,11 +1,13 @@
 import SwiftUI
 import AppKit
 
-// Shared hover selection between the host list panel and the floating detail card.
+// Which host's detail popup is currently open (toggled by clicking a row).
 final class PanelHoverState: ObservableObject {
     static let shared = PanelHoverState()
     @Published var hostID: UUID?
     private init() {}
+
+    func toggle(_ id: UUID) { hostID = (hostID == id) ? nil : id }
 }
 
 struct MenuPanelView: View {
@@ -101,8 +103,9 @@ struct MenuPanelView: View {
         .padding(.horizontal, 7).padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: 5).fill(active ? Color.accentColor : Color.clear))
         .contentShape(Rectangle())
-        .onHover { if $0 { hover.hostID = host.id } }
-        .onTapGesture { onSelectHost?(host) }
+        // Double click → open Главная; single click → toggle the detail popup.
+        .onTapGesture(count: 2) { onSelectHost?(host) }
+        .onTapGesture(count: 1) { hover.toggle(host.id) }
     }
 
     private var emptyState: some View {
