@@ -214,7 +214,8 @@ struct RowSparkline: View {
                 for (i, p) in bars.enumerated() {
                     let x = CGFloat(i) * (barW + gap)
                     // Failure → full-height red bar.
-                    let half = p.failed ? (h * 0.46) : max(1, CGFloat(p.value / maxVal) * (h * 0.46))
+                    // Failure → small red mark (no ping = tiny bar).
+                    let half = p.failed ? (h * 0.12) : max(1, CGFloat(p.value / maxVal) * (h * 0.46))
                     let rect = CGRect(x: x, y: cy - half, width: barW, height: half * 2)
                     let c: Color = p.failed ? .red : color(p.value)
                     ctx.fill(Path(roundedRect: rect, cornerRadius: barW/2),
