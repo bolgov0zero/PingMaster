@@ -208,7 +208,7 @@ struct DashboardView: View {
     private func statsCard(_ host: Host) -> some View {
         // When the live ping drives the Онлайн view, stats come from it.
         let source = useLivePing ? live.points : history
-        let window = Array(source.suffix(60).map(\.value))
+        let window = Array(source.suffix(60).filter { !$0.failed }.map(\.value))
         let d: (sent: Int, received: Int) = useLivePing
             ? (live.sent, live.received)
             : service.delivery(for: host, count: 60)
@@ -252,7 +252,8 @@ struct DashboardView: View {
                         ForEach(Array(lastPings.enumerated()).reversed(), id: \.element.id) { j, p in
                             // Compare to the reading just before it in the full series.
                             let gi = start + j
-                            pingPill(p.value, prev: gi > 0 ? source[gi - 1].value : nil)
+                            let prev = gi > 0 ? source[gi - 1] : nil
+                            pingPill(p, prev: prev)
                         }
                     }
                 }
@@ -262,25 +263,36 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private func pingPill(_ value: Double, prev: Double?) -> some View {
-        // Arrow vs the previous reading: up = latency rose (worse), down = fell.
-        let trend: (sym: String, color: Color)? = {
-            guard let prev else { return nil }
-            if value > prev { return ("arrow.up", .red) }
-            if value < prev { return ("arrow.down", .green) }
-            return ("minus", .secondary)
-        }()
-        HStack(spacing: 2) {
-            Text(String(format: "%.0f", value))
-                .font(.caption2.monospacedDigit())
-                .foregroundColor(latencyColor(value))
-            if let trend {
-                Image(systemName: trend.sym).font(.system(size: 7, weight: .bold))
-                    .foregroundColor(trend.color)
+    private func pingPill(_ point: LatencyPoint, prev: LatencyPoint?) -> some View {
+        if point.failed {
+            HStack(spacing: 2) {
+                Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                Text("нет").font(.caption2)
             }
+            .foregroundColor(.red)
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(Capsule().fill(Color.red.opacity(0.15)))
+        } else {
+            // Arrow vs the previous successful reading: up = rose, down = fell.
+            let prevVal = (prev?.failed == false) ? prev?.value : nil
+            let trend: (sym: String, color: Color)? = {
+                guard let prevVal else { return nil }
+                if point.value > prevVal { return ("arrow.up", .red) }
+                if point.value < prevVal { return ("arrow.down", .green) }
+                return ("minus", .secondary)
+            }()
+            HStack(spacing: 2) {
+                Text(String(format: "%.0f", point.value))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(latencyColor(point.value))
+                if let trend {
+                    Image(systemName: trend.sym).font(.system(size: 7, weight: .bold))
+                        .foregroundColor(trend.color)
+                }
+            }
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(Capsule().fill(latencyColor(point.value).opacity(0.15)))
         }
-        .padding(.horizontal, 6).padding(.vertical, 3)
-        .background(Capsule().fill(latencyColor(value).opacity(0.15)))
     }
 
     private func statTile(_ icon: String, _ label: String, _ value: String, _ tint: Color) -> some View {

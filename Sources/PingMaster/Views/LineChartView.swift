@@ -22,7 +22,10 @@ struct LineChartView: View {
             let plot = CGRect(x: leftPad, y: topPad,
                               width: max(1, w - leftPad - rightPad),
                               height: max(1, h - topPad - bottomPad))
-            let values = slots.compactMap { $0?.value }
+            let values = slots.compactMap { c -> Double? in
+                guard let c, !c.failed else { return nil }
+                return c.value
+            }
             let niceMax = niceCeil(max((values.max() ?? orangeThreshold) * 1.15, 10))
             let n = slots.count
             let stepX = n > 1 ? plot.width / CGFloat(n - 1) : 0
@@ -58,17 +61,24 @@ struct LineChartView: View {
                         ctx.draw(label, at: CGPoint(x: plot.minX - 6, y: y), anchor: .trailing)
                     }
 
-                    // Build segments (break on gaps)
+                    // Build segments (break on gaps and failures)
                     var segments: [[CGPoint]] = []
                     var current: [CGPoint] = []
                     for (i, cell) in slots.enumerated() {
-                        if let v = cell?.value {
-                            current.append(pt(i, v))
+                        if let cell, !cell.failed {
+                            current.append(pt(i, cell.value))
                         } else if !current.isEmpty {
                             segments.append(current); current = []
                         }
                     }
                     if !current.isEmpty { segments.append(current) }
+
+                    // Red downtime ticks for failures.
+                    for (i, cell) in slots.enumerated() where cell?.failed == true {
+                        let x = plot.minX + CGFloat(i) * stepX
+                        let tick = CGRect(x: x - 1, y: plot.maxY - plot.height * 0.33, width: 2, height: plot.height * 0.33)
+                        ctx.fill(Path(roundedRect: tick, cornerRadius: 1), with: .color(.red.opacity(0.8)))
+                    }
 
                     for seg in segments {
                         guard seg.count > 0 else { continue }
@@ -91,8 +101,8 @@ struct LineChartView: View {
                         }
                     }
 
-                    // End point dot
-                    if let lastIdx = slots.lastIndex(where: { $0 != nil }), let v = slots[lastIdx]?.value {
+                    // End point dot (last successful reading)
+                    if let lastIdx = slots.lastIndex(where: { $0?.failed == false }), let v = slots[lastIdx]?.value {
                         let p = pt(lastIdx, v)
                         ctx.fill(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)),
                                  with: .color(barColor(v)))
@@ -101,8 +111,8 @@ struct LineChartView: View {
                     }
                 }
 
-                // End value bubble
-                if let lastIdx = slots.lastIndex(where: { $0 != nil }), let v = slots[lastIdx]?.value {
+                // End value bubble (last successful reading)
+                if let lastIdx = slots.lastIndex(where: { $0?.failed == false }), let v = slots[lastIdx]?.value {
                     let p = pt(lastIdx, v)
                     Text(String(format: "%.1f ms", v))
                         .font(.caption.monospacedDigit().weight(.semibold))
@@ -118,8 +128,12 @@ struct LineChartView: View {
                     let p = pt(idx, point.value)
                     VStack(spacing: 1) {
                         Text(point.timestamp, format: dateStyle).font(.system(size: 9)).foregroundColor(.secondary)
-                        Text(String(format: "%.1f мс", point.value)).font(.caption.monospacedDigit().bold())
-                            .foregroundColor(barColor(point.value))
+                        if point.failed {
+                            Text("нет ответа").font(.caption.bold()).foregroundColor(.red)
+                        } else {
+                            Text(String(format: "%.1f мс", point.value)).font(.caption.monospacedDigit().bold())
+                                .foregroundColor(barColor(point.value))
+                        }
                     }
                     .padding(.horizontal, 7).padding(.vertical, 4)
                     .background(RoundedRectangle(cornerRadius: 6).fill(.regularMaterial))

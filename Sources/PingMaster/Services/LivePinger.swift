@@ -55,7 +55,12 @@ final class LivePinger: ObservableObject {
                         if self.points.count > self.maxPoints { self.points.removeFirst() }
                     }
                 } else if Self.isTimeout(line) {
-                    DispatchQueue.main.async { self?.sent += 1 }
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        self.sent += 1
+                        self.points.append(LatencyPoint(timestamp: Date(), value: 0, failed: true))
+                        if self.points.count > self.maxPoints { self.points.removeFirst() }
+                    }
                 }
             }
         }

@@ -209,14 +209,16 @@ struct RowSparkline: View {
             let barW: CGFloat = 2.5, gap: CGFloat = 1.5
             let maxBars = max(1, Int((w + gap) / (barW + gap)))
             let bars = Array(points.suffix(maxBars))
-            let maxVal = bars.map(\.value).max() ?? 1
+            let maxVal = bars.filter { !$0.failed }.map(\.value).max() ?? 1
             Canvas { ctx, _ in
                 for (i, p) in bars.enumerated() {
-                    let half = max(1, CGFloat(p.value / maxVal) * (h * 0.46))
                     let x = CGFloat(i) * (barW + gap)
+                    // Failure → full-height red bar.
+                    let half = p.failed ? (h * 0.46) : max(1, CGFloat(p.value / maxVal) * (h * 0.46))
                     let rect = CGRect(x: x, y: cy - half, width: barW, height: half * 2)
+                    let c: Color = p.failed ? .red : color(p.value)
                     ctx.fill(Path(roundedRect: rect, cornerRadius: barW/2),
-                             with: .color(color(p.value).opacity(0.85)))
+                             with: .color(c.opacity(0.85)))
                 }
             }
         }

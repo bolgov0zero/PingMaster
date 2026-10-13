@@ -203,6 +203,12 @@ class MonitoringService: ObservableObject {
                     EventLog.shared.record(hostID: host.id, hostName: host.name, up: true)
                 }
             } else {
+                // Record a failure marker so charts/sparklines show red gaps.
+                var history = self.latencyHistory[host.id] ?? []
+                history.append(LatencyPoint(timestamp: Date(), value: 0, failed: true))
+                if history.count > self.maxHistoryPoints { history.removeFirst() }
+                self.latencyHistory[host.id] = history
+
                 host.consecutiveFailures += 1
                 if host.consecutiveFailures >= host.failThreshold {
                     host.isAvailable = false
@@ -288,7 +294,7 @@ class MonitoringService: ObservableObject {
     func status(for host: Host) -> HostStatus {
         if !host.isAvailable { return .red }
         let s = GlobalSettings.shared
-        let recent = (latencyHistory[host.id] ?? []).suffix(3).map(\.value)
+        let recent = (latencyHistory[host.id] ?? []).filter { !$0.failed }.suffix(3).map(\.value)
         guard recent.count >= 3 else { return .green }
         // zone: 0 green, 1 orange, 2 red
         func zone(_ ms: Double) -> Int {

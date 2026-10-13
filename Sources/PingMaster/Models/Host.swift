@@ -9,7 +9,8 @@ enum PollMethod: String, Codable, CaseIterable {
 struct LatencyPoint: Identifiable {
     let id = UUID()
     let timestamp: Date
-    let value: Double  // ms, nil-safe: timeouts not stored
+    let value: Double   // ms (0 when failed)
+    var failed: Bool = false   // true for a timeout / no reply
 }
 
 class Host: ObservableObject, Identifiable, Codable {
